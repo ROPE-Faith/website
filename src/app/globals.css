@@ -1,0 +1,277 @@
+@import "tailwindcss";
+
+@theme {
+  /* Core palette — richer, more intentional */
+  --color-ivory: #f5efe3;
+  --color-cream: #ebe4d4;
+  --color-cream-dark: #ddd5c3;
+  --color-brown: #5c4327;
+  --color-brown-light: #7d6245;
+  --color-dark: #2e2418;
+  --color-muted: #9a8e7a;
+  --color-muted-light: #b8ad9a;
+  --color-sidebar: #e6ddd0;
+  --color-accent-gold: #c4a265;
+  --color-accent-olive: #7a8c6a;
+
+  /* Semantic */
+  --color-struggle: #b86b4e;
+  --color-prayer: #6d8c5c;
+  --color-praise: #c4a044;
+
+  /* Typography */
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Shadows — warm tinted */
+  --shadow-card: 0 1px 3px rgba(46, 36, 24, 0.06), 0 1px 2px rgba(46, 36, 24, 0.04);
+  --shadow-card-hover: 0 4px 12px rgba(46, 36, 24, 0.08), 0 2px 4px rgba(46, 36, 24, 0.04);
+  --shadow-elevated: 0 8px 24px rgba(46, 36, 24, 0.1), 0 2px 8px rgba(46, 36, 24, 0.06);
+
+  /* Animations */
+  --animate-fade-in: fadeIn 0.4s ease-out both;
+  --animate-fade-in-up: fadeInUp 0.5s ease-out both;
+  --animate-pulse-gentle: pulse-gentle 3s ease-in-out infinite;
+  --animate-zoom-in-fade: zoom-in-fade 0.8s ease-in-out forwards;
+  --animate-breathe: breathe 3s ease-in-out infinite;
+  --animate-fade-in-fast: fadeIn 0.15s ease-out both;
+}
+
+/* Hide native video controls on iOS Safari */
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button,
+video::-webkit-media-controls {
+  display: none !important;
+  -webkit-appearance: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Base */
+body {
+  background-color: var(--color-ivory);
+  color: var(--color-dark);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+/* Refined textarea and input styling */
+textarea, input[type="text"], input[type="email"], input[type="password"] {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+textarea:focus, input:focus {
+  border-color: var(--color-brown) !important;
+  box-shadow: 0 0 0 3px rgba(92, 67, 39, 0.08) !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(154, 142, 122, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 142, 122, 0.5);
+}
+
+/* Subtle parchment texture on cards */
+.card-surface {
+  background: linear-gradient(135deg, var(--color-cream) 0%, #ede6d6 50%, var(--color-cream) 100%);
+  border: 1px solid rgba(92, 67, 39, 0.08);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.card-surface:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Section divider with subtle olive branch */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(92, 67, 39, 0.12) 20%, rgba(92, 67, 39, 0.12) 80%, transparent);
+}
+
+/* Button base refinement */
+.btn-primary {
+  background: var(--color-brown);
+  color: var(--color-ivory);
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(46, 36, 24, 0.15);
+}
+.btn-primary:hover {
+  background: var(--color-brown-light);
+  box-shadow: 0 2px 8px rgba(46, 36, 24, 0.2);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(46, 36, 24, 0.15);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Step badge (R, O, P, E circles) */
+.step-badge {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--color-brown);
+  color: var(--color-ivory);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(92, 67, 39, 0.2);
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-gentle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes zoom-in-fade {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(92, 67, 39, 0.15); }
+  50% { transform: scale(1.015); box-shadow: 0 0 16px 4px rgba(92, 67, 39, 0.08); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(245, 239, 227, 0.08); }
+  50% { text-shadow: 0 0 24px rgba(245, 239, 227, 0.2), 0 0 48px rgba(245, 239, 227, 0.08); }
+}
+
+@keyframes floatUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes lineGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes scrollDot {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(6px); }
+}
+
+/* Dark mode */
+.dark {
+  --color-ivory: #1a1714;
+  --color-cream: #231f1a;
+  --color-cream-dark: #2a2520;
+  --color-brown: #c4a265;
+  --color-brown-light: #d4b87a;
+  --color-dark: #e8e0d4;
+  --color-muted: #a39683; /* Lightened for better contrast */
+  --color-muted-light: #6b6050;
+  --color-sidebar: #1e1b16;
+  --color-accent-gold: #c4a265;
+  --color-accent-olive: #8a9c7a;
+}
+
+.dark body,
+.dark {
+  background-color: #1a1714;
+  color: #e8e0d4;
+}
+
+.dark .card-surface {
+  background: linear-gradient(135deg, #231f1a 0%, #282420 50%, #231f1a 100%);
+  border-color: rgba(196, 162, 101, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.dark .card-surface:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.dark .btn-primary {
+  background: #c4a265;
+  color: #1a1714;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .btn-primary:hover {
+  background: #d4b87a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.dark .step-badge {
+  background: #c4a265;
+  color: #1a1714;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.dark .section-divider {
+  background: linear-gradient(90deg, transparent, rgba(196, 162, 101, 0.15) 20%, rgba(196, 162, 101, 0.15) 80%, transparent);
+}
+
+.dark textarea,
+.dark input[type="text"],
+.dark select {
+  background-color: #1a1714 !important;
+  border-color: rgba(196, 162, 101, 0.12) !important;
+  color: #e8e0d4 !important;
+}
+
+.dark textarea::placeholder,
+.dark input::placeholder {
+  color: rgba(138, 126, 106, 0.6) !important;
+}
+
+.dark textarea:focus,
+.dark input:focus {
+  border-color: #c4a265 !important;
+  box-shadow: 0 0 0 3px rgba(196, 162, 101, 0.1) !important;
+}
