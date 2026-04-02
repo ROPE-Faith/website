@@ -44,6 +44,8 @@ export default function CommunityPage() {
   const [posting, setPosting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ id: string, type: 'post' | 'comment' | 'prayer', title: string, desc: string } | null>(null);
 
   const { userId } = useAuth();
 

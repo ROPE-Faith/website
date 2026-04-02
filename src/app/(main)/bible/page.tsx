@@ -88,8 +88,17 @@ function BibleContent() {
     setHistory(hist);
     
     if (!urlBook && hist.length > 0) {
-      setBook(hist[0].book);
-      setChapter(hist[0].chapter);
+      const lastBook = hist[0].book;
+      const lastChapter = hist[0].chapter;
+      setBook(lastBook);
+      setChapter(lastChapter);
+      
+      // Update URL to match
+      const params = new URLSearchParams(window.location.search);
+      params.set("b", lastBook);
+      params.set("c", lastChapter.toString());
+      params.set("m", communityMode ? "community" : "personal");
+      router.replace(`${pathname}?${params.toString()}`);
     }
     setIsInitializing(false);
 
