@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import {
   getPublicPrayers,
   getForumPosts,
@@ -22,11 +22,21 @@ import {
   deleteVerseReply
 } from "@/lib/community-actions";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { OliveBranch } from "@/components/Accents";
 import { fetchVerse } from "@/lib/store";
 
-export default function CommunityPage() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'forum' | 'prayers'>('feed');
+function CommunityPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  const urlTab = searchParams.get("tab");
+  const initialTab = (urlTab === "stream" ? "feed" : urlTab) as any;
+  
+  const [activeTab, setActiveTabState] = useState<'feed' | 'forum' | 'prayers'>(
+    ['feed', 'forum', 'prayers'].includes(initialTab) ? initialTab : 'feed'
+  );
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [prayers, setPrayers] = useState<any[]>([]);
@@ -48,6 +58,28 @@ export default function CommunityPage() {
   const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ id: string, type: 'post' | 'comment' | 'prayer', title: string, desc: string } | null>(null);
 
   const { userId } = useAuth();
+  const { user } = useUser();
+
+  useEffect(() => {
+    if (urlTab) {
+      const tab = urlTab === "stream" ? "feed" : urlTab;
+      if (['feed', 'forum', 'prayers'].includes(tab) && tab !== activeTab) {
+        setActiveTabState(tab as any);
+      }
+    } else {
+      // Default to stream if no tab is present
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", "stream");
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [urlTab]);
+
+  const setActiveTab = (tab: 'feed' | 'forum' | 'prayers') => {
+    setActiveTabState(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab === "feed" ? "stream" : tab);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
 
   useEffect(() => {
     if (errorNotice) {
@@ -128,7 +160,7 @@ export default function CommunityPage() {
       createdAt: new Date().toISOString(),
       profile: {
         displayName: user?.fullName || user?.username || "You",
-        imageUrl: user?.imageUrl,
+        imageUrl: user?.imageUrl || "",
       },
       likeCount: 0,
       userLiked: false,
@@ -407,6 +439,23 @@ export default function CommunityPage() {
 
           {activeTab === 'prayers' && (
             <div className="space-y-6">
+              <div className="p-6 bg-accent-gold/5 border border-accent-gold/20 rounded-[2rem] text-center space-y-3 mx-1">
+                <p className="text-dark text-sm italic font-serif leading-relaxed px-4">
+                  "Let them give thanks to the LORD for his unfailing love and his wonderful deeds for mankind."
+                </p>
+                <div className="pt-2">
+                  <a 
+                    href="/prayers" 
+                    className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-accent-gold hover:text-accent-gold/80 transition shadow-sm bg-accent-gold/5 px-4 py-2 rounded-xl"
+                  >
+                    <span>View Your Prayer Board</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </a>
+                  <p className="text-[10px] text-muted-dark/40 mt-3 italic px-6 leading-relaxed">
+                    Tip: Visit your prayer board and click the "Private" badge on any answered prayer to share it here as a testimony for others!
+                  </p>
+                </div>
+              </div>
               {prayers.map((prayer) => (
                 <div key={prayer.id} className="space-y-2">
                   <CommunityCard
@@ -506,6 +555,14 @@ export default function CommunityPage() {
         <CommunityHelpModal onClose={() => setShowHelp(false)} />
       )}
     </div>
+  );
+}
+
+export default function CommunityPageWrapper() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center font-serif text-muted">Loading Community...</div>}>
+      <CommunityPage />
+    </Suspense>
   );
 }
 
