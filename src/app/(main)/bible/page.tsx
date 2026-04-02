@@ -371,7 +371,7 @@ function BibleContent() {
       {error && (
         <div className="text-center py-12 px-6 bg-red-400/5 rounded-2xl border border-red-400/10">
           <p className="text-red-400/80 text-sm mb-4">{error}</p>
-          <button onClick={loadChapter} className="text-xs text-red-500 font-medium underline underline-offset-4">Try again</button>
+          <button onClick={() => loadChapter()} className="text-xs text-red-500 font-medium underline underline-offset-4">Try again</button>
         </div>
       )}
 
