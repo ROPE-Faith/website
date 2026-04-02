@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getVerseComments, postVerseComment, voteComment } from "@/lib/community-actions";
-import { useAuth } from "@clerk/nextjs";
+import { getVerseComments, postVerseComment, voteComment, deleteVerseComment } from "@/lib/community-actions";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 interface Comment {
   id: string;
@@ -31,41 +31,80 @@ export default function VerseDiscussionDrawer({
   const [posting, setPosting] = useState(false);
   const [sortBy, setSortBy] = useState<'top' | 'recent'>('top');
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { isLoaded, userId } = useAuth();
+  const { user } = useUser();
  
-   const loadComments = async () => {
-     setLoading(true);
+   const loadComments = async (silent = false) => {
+     if (!silent) setLoading(true);
+     else setIsRefreshing(true);
      setError(null);
      try {
        const data = await getVerseComments(book, chapter, verse, sortBy);
        setComments(data as any);
      } catch (err: any) {
        console.error(err);
-       setError(err.message || "Failed to load reflections");
+       if (!silent) setError(err.message || "Failed to load reflections");
      } finally {
        setLoading(false);
+       setIsRefreshing(false);
      }
    };
 
-  useEffect(() => {
-    loadComments();
-  }, [book, chapter, verse, sortBy]);
+   useEffect(() => {
+     loadComments();
+     
+     const interval = setInterval(() => {
+       loadComments(true);
+     }, 30000); // Poll every 30s
+     
+     return () => clearInterval(interval);
+   }, [book, chapter, verse, sortBy]);
 
-  const handlePost = async () => {
-    if (!newComment.trim() || !userId) return;
-    setPosting(true);
-    setError(null);
-    try {
-      await postVerseComment(book, chapter, verse, newComment);
-      setNewComment("");
-      loadComments();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to post reflection. Please try again.");
-    } finally {
-      setPosting(false);
-    }
-  };
+   const handlePost = async () => {
+     if (!newComment.trim() || !userId) return;
+     
+     const commentText = newComment;
+     setNewComment(""); // Clear immediately for better UX
+     setPosting(true);
+     setError(null);
+
+     // Optimistic Update
+     const tempId = `temp-${Date.now()}`;
+     const optimisticComment: Comment = {
+       id: tempId,
+       userId,
+       content: commentText,
+       createdAt: new Date().toISOString(),
+       profile: {
+         displayName: user?.fullName || user?.username || "You",
+         imageUrl: user?.imageUrl,
+       },
+       score: 0,
+       userVote: null,
+     };
+
+     if (sortBy === 'recent') {
+       setComments(prev => [optimisticComment, ...prev]);
+     } else {
+       setComments(prev => [...prev, optimisticComment]);
+     }
+
+     try {
+       await postVerseComment(book, chapter, verse, commentText);
+       loadComments(true); // Sync with server silently
+     } catch (err: any) {
+       console.error(err);
+       setError(err.message || "Failed to post reflection. Please try again.");
+       // Rollback optimistic update
+       setComments(prev => prev.filter(c => c.id !== tempId));
+       setNewComment(commentText); // Restore text on failure
+     } finally {
+       setPosting(false);
+     }
+   };
 
   const handleVote = async (commentId: string, type: 'up' | 'down') => {
     if (!userId) return;
@@ -94,6 +133,24 @@ export default function VerseDiscussionDrawer({
       console.error(err);
       setError(err.message || "Failed to vote. Please try again.");
       loadComments(); // Revert on failure
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    
+    // Optimistic delete
+    setComments(prev => prev.filter(c => c.id !== id));
+    
+    try {
+      await deleteVerseComment(id);
+      loadComments(true);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to delete.");
+      loadComments(true); // Restore on error
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -190,6 +247,15 @@ export default function VerseDiscussionDrawer({
                         <svg width="14" height="14" viewBox="0 0 24 24" fill={comment.userVote === 'down' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5"><path d="M17 14l-5 5-5-5" /><path d="M12 19V5" /></svg>
                       </button>
                     </div>
+                    {userId && comment.userId === userId && (
+                      <button
+                        onClick={() => setConfirmDeleteId(comment.id)}
+                        disabled={deletingId === comment.id}
+                        className="ml-auto text-[9px] uppercase font-bold tracking-widest text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === comment.id ? "..." : "Delete"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -227,6 +293,32 @@ export default function VerseDiscussionDrawer({
           <p className="text-[10px] text-muted text-center mt-2 italic">Sign in to join the conversation.</p>
         )}
       </div>
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-cream-dark/40 backdrop-blur-sm" style={{ animation: "fadeIn 0.2s ease-out both" }}>
+          <div className="bg-ivory rounded-3xl p-6 shadow-2xl border border-brown/10 max-w-sm w-full" style={{ animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <h3 className="font-serif text-xl text-dark mb-2">Delete Reflection?</h3>
+            <p className="text-sm text-muted mb-6">This action cannot be undone. Your reflection will be permanently removed from this passage.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 px-4 py-2.5 bg-brown/5 text-brown text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-brown/10 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  handleDelete(confirmDeleteId);
+                  setConfirmDeleteId(null);
+                }}
+                className="flex-1 px-4 py-2.5 bg-red-400/10 text-red-500 text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-red-400/20 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

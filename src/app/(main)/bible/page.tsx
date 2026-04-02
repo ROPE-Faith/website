@@ -19,8 +19,8 @@ import {
   getMemoryVerses,
   type BibleHighlight 
 } from "@/lib/store";
-import { getPublicHighlights, addPublicHighlight, getChapterCommentPreviews, getVerseComments, postVerseComment, voteComment } from "@/lib/community-actions";
-import { useAuth } from "@clerk/nextjs";
+import { getPublicHighlights, addPublicHighlight, getChapterCommentPreviews, getVerseComments, postVerseComment, voteComment, deleteVerseComment } from "@/lib/community-actions";
+import { useAuth, useUser } from "@clerk/nextjs";
 
 const HIGHLIGHT_COLORS = [
   { id: "gold", bg: "rgba(196,162,101,0.2)", border: "rgba(196,162,101,0.4)", label: "Gold" },
@@ -49,6 +49,7 @@ function BibleContent() {
 
   const [book, setBook] = useState(urlBook || "John");
   const [chapter, setChapter] = useState(urlChapter || 1);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [translation, setTranslationState] = useState("kjv");
   const [communityMode, setCommunityMode] = useState(urlMode === "community");
   const [verses, setVerses] = useState<VerseData[]>([]);
@@ -82,7 +83,16 @@ function BibleContent() {
   // Load initial translation preference and history
   useEffect(() => {
     setTranslationState(getTranslation());
-    setHistory(getBibleHistory());
+    
+    const hist = getBibleHistory();
+    setHistory(hist);
+    
+    if (!urlBook && hist.length > 0) {
+      setBook(hist[0].book);
+      setChapter(hist[0].chapter);
+    }
+    setIsInitializing(false);
+
     setMemoryVerses(getMemoryVerses());
 
     const handleMemoryChange = (e: any) => {
@@ -105,37 +115,49 @@ function BibleContent() {
   }, [searchParams, pathname, router]);
 
   // Fetch chapter when book/chapter/translation changes
-  const loadChapter = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    setSelectedVerse(null);
-    setShowColorPicker(false);
+  const loadChapter = useCallback(async (silent = false) => {
+    if (isInitializing) return;
+    
+    if (!silent) {
+      setLoading(true);
+      setError("");
+      setSelectedVerse(null);
+      setShowColorPicker(false);
+    }
 
     try {
-      const data = await fetchChapterVerses(book, chapter, translation);
-      setVerses(data);
-      setHighlights(getHighlightsForChapter(book, chapter));
+      if (!silent) {
+        const data = await fetchChapterVerses(book, chapter, translation);
+        setVerses(data);
+        setHighlights(getHighlightsForChapter(book, chapter));
+      }
       
       // Fetch previews if in community mode
       if (communityMode) {
         const cp = await getChapterCommentPreviews(book, chapter.toString());
         setCommentPreviews(cp);
-      } else {
+      } else if (!silent) {
         setCommentPreviews({});
       }
 
-      updateBibleHistory(book, chapter);
-      setHistory(getBibleHistory());
+      if (!silent) {
+        updateBibleHistory(book, chapter);
+        setHistory(getBibleHistory());
+      }
     } catch {
-      setError("Could not load chapter. Try a different translation.");
-      setVerses([]);
+      if (!silent) {
+        setError("Could not load chapter. Try a different translation.");
+        setVerses([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [book, chapter, translation, communityMode]);
+  }, [book, chapter, translation, communityMode, isInitializing]);
 
   useEffect(() => {
     loadChapter();
+    const interval = setInterval(() => loadChapter(true), 30000);
+    return () => clearInterval(interval);
   }, [loadChapter]);
 
   function changePassage(newBook: string, newChapter: number) {
@@ -514,6 +536,21 @@ function BibleContent() {
                         verse={v.verse.toString()} 
                         verseText={v.text}
                         onClose={() => setShowDiscussion(false)}
+                        onCommentPosted={(newComment) => {
+                          setCommentPreviews(prev => ({
+                            ...prev,
+                            [v.verse.toString()]: newComment
+                          }));
+                        }}
+                        onCommentDeleted={(id) => {
+                          setCommentPreviews(prev => {
+                            const p = { ...prev };
+                            if (p[v.verse.toString()]?.id === id) {
+                              delete p[v.verse.toString()];
+                            }
+                            return p;
+                          });
+                        }}
                       />
                     </div>
                   )}
@@ -574,14 +611,17 @@ function BibleContent() {
   );
 }
 
-function VerseDiscussionView({ book, chapter, verse, verseText, onClose }: { book: string; chapter: string; verse: string; verseText: string; onClose: () => void }) {
+function VerseDiscussionView({ book, chapter, verse, verseText, onClose, onCommentPosted, onCommentDeleted }: { book: string; chapter: string; verse: string; verseText: string; onClose: () => void; onCommentPosted?: (c: any) => void; onCommentDeleted?: (id: string) => void }) {
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [posting, setPosting] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { userId } = useAuth();
+  const { user } = useUser();
 
   const loadComments = async (isLoadMore = false) => {
     if (!isLoadMore) setLoading(true);
@@ -606,13 +646,35 @@ function VerseDiscussionView({ book, chapter, verse, verseText, onClose }: { boo
 
   const handlePost = async () => {
     if (!newComment.trim() || !userId) return;
+    
+    const commentText = newComment;
+    setNewComment("");
     setPosting(true);
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticComment = {
+      id: tempId,
+      userId,
+      content: commentText,
+      createdAt: new Date().toISOString(),
+      profile: {
+        displayName: user?.fullName || user?.username || "You",
+        imageUrl: user?.imageUrl,
+      },
+      score: 0,
+      userVote: null,
+    };
+
+    setComments(prev => [optimisticComment, ...prev]);
+    onCommentPosted?.(optimisticComment);
+
     try {
-      await postVerseComment(book, chapter, verse, newComment, verseText);
-      setNewComment("");
+      await postVerseComment(book, chapter, verse, commentText, verseText);
       loadComments();
     } catch (err) {
       console.error(err);
+      setComments(prev => prev.filter(c => c.id !== tempId));
+      setNewComment(commentText);
     } finally {
       setPosting(false);
     }
@@ -630,6 +692,24 @@ function VerseDiscussionView({ book, chapter, verse, verseText, onClose }: { boo
       return c;
     }));
     await voteComment(id, type);
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    
+    // Optimistic delete
+    setComments(prev => prev.filter(c => c.id !== id));
+    onCommentDeleted?.(id);
+    
+    try {
+      await deleteVerseComment(id);
+      loadComments();
+    } catch (err: any) {
+      console.error(err);
+      loadComments(); // Restore on error
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -687,6 +767,15 @@ function VerseDiscussionView({ book, chapter, verse, verseText, onClose }: { boo
                       <svg width="12" height="12" viewBox="0 0 24 24" fill={c.userVote === 'up' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5"><path d="M7 10l5-5 5 5" /><path d="M12 5v14" /></svg>
                       {c.score}
                     </button>
+                    {userId && c.userId === userId && (
+                      <button
+                        onClick={() => setConfirmDeleteId(c.id)}
+                        disabled={deletingId === c.id}
+                        className="ml-auto text-[9px] uppercase font-bold tracking-widest text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === c.id ? "..." : "Delete"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -702,6 +791,32 @@ function VerseDiscussionView({ book, chapter, verse, verseText, onClose }: { boo
           </>
         )}
       </div>
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-cream-dark/40 backdrop-blur-sm rounded-xl" style={{ animation: "fadeIn 0.2s ease-out both" }}>
+          <div className="bg-ivory rounded-2xl p-5 shadow-xl border border-brown/10 max-w-[280px] w-full" style={{ animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <h3 className="font-serif text-lg text-dark mb-1">Delete Reflection?</h3>
+            <p className="text-[11px] text-muted mb-4 leading-relaxed">This action cannot be undone. It will be permanently removed.</p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 py-2 bg-brown/5 text-brown text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-brown/10 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  handleDelete(confirmDeleteId);
+                  setConfirmDeleteId(null);
+                }}
+                className="flex-1 py-2 bg-red-400/10 text-red-500 text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-red-400/20 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,7 +21,7 @@ import {
   postVerseReply,
   deleteVerseReply
 } from "@/lib/community-actions";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { OliveBranch } from "@/components/Accents";
 import { fetchVerse } from "@/lib/store";
 
@@ -54,8 +54,9 @@ export default function CommunityPage() {
     }
   }, [errorNotice]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setIsRefreshing(true);
     try {
       const [prayersData, postsData, feedData] = await Promise.all([
         getPublicPrayers(20, 0),
@@ -71,8 +72,17 @@ export default function CommunityPage() {
       console.error(err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 45000); // 45s feed refresh
+    return () => clearInterval(interval);
+  }, []);
 
   const loadMoreFeed = async () => {
     if (loadingMore || !hasMoreFeed) return;
@@ -100,15 +110,42 @@ export default function CommunityPage() {
 
   async function handleCreatePost() {
     if (!newPost.title.trim() || !newPost.content.trim()) return;
+    
+    const postData = { ...newPost };
+    setNewPost({ title: "", content: "", category: "General" });
+    setShowCreatePost(false);
     setPosting(true);
     setErrorNotice(null);
+    
+    // Optimistic update
+    const tempId = `temp-${Date.now()}`;
+    const optimisticPost = {
+      id: tempId,
+      userId,
+      ...postData,
+      createdAt: new Date().toISOString(),
+      profile: {
+        displayName: user?.fullName || user?.username || "You",
+        imageUrl: user?.imageUrl,
+      },
+      likeCount: 0,
+      userLiked: false,
+      replyCount: 0,
+      type: 'post'
+    };
+    
+    setPosts(prev => [optimisticPost, ...prev]);
+    setFeed(prev => [optimisticPost, ...prev]);
+
     try {
-      await createForumPost(newPost.title, newPost.content, newPost.category);
-      setNewPost({ title: "", content: "", category: "General" });
-      setShowCreatePost(false);
-      loadData();
+      await createForumPost(postData.title, postData.content, postData.category);
+      loadData(true);
     } catch (err: any) {
       setErrorNotice(err.message || "Could not create discussion. Please try again.");
+      setPosts(prev => prev.filter(p => p.id !== tempId));
+      setFeed(prev => prev.filter(f => f.id !== tempId));
+      setNewPost(postData);
+      setShowCreatePost(true);
     } finally {
       setPosting(false);
     }
@@ -140,44 +177,51 @@ export default function CommunityPage() {
   };
 
   const handleDeletePost = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this post?")) return;
     try {
-      // Optimistic delete from state
       setPosts(prev => prev.filter(p => p.id !== id));
       setFeed(prev => prev.filter(f => f.id !== id));
       await deleteForumPost(id);
     } catch (err) {
       console.error(err);
       setErrorNotice("Could not delete post.");
-      loadData(); // Rollback/Refresh
+      loadData(); 
     }
   };
 
   const handleDeleteComment = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this discussion?")) return;
     try {
-      // Optimistic delete from state
       setFeed(prev => prev.filter(f => f.id !== id));
       await deleteVerseComment(id);
     } catch (err) {
       console.error(err);
       setErrorNotice("Could not delete discussion.");
-      loadData(); // Rollback/Refresh
+      loadData(); 
     }
   };
 
   const handleDeletePrayer = async (id: string) => {
-    if (!confirm("Remove this testimony from the community feed?")) return;
     try {
-      // Optimistic delete from state
       setPrayers(prev => prev.filter(p => p.id !== id));
       setFeed(prev => prev.filter(f => f.id !== id));
       await togglePrayerPublic(id, false);
     } catch (err) {
       console.error(err);
       setErrorNotice("Could not remove testimony.");
-      loadData(); // Rollback/Refresh
+      loadData(); 
     }
+  };
+
+  const requestDeletePost = (id: string) => setDeleteConfirmInfo({ id, type: 'post', title: 'Delete Topic?', desc: 'This will permanently remove your topic from the forum.' });
+  const requestDeleteComment = (id: string) => setDeleteConfirmInfo({ id, type: 'comment', title: 'Delete Discussion?', desc: 'This will permanently remove your discussion.' });
+  const requestDeletePrayer = (id: string) => setDeleteConfirmInfo({ id, type: 'prayer', title: 'Remove Testimony?', desc: 'This will remove your testimony from the global feed.' });
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmInfo) return;
+    const { id, type } = deleteConfirmInfo;
+    setDeleteConfirmInfo(null);
+    if (type === 'post') await handleDeletePost(id);
+    if (type === 'comment') await handleDeleteComment(id);
+    if (type === 'prayer') await handleDeletePrayer(id);
   };
 
   const handleLike = async (id: string) => {
@@ -286,7 +330,7 @@ export default function CommunityPage() {
                     <VerseDiscussionCard
                       item={item}
                       currentUserId={userId}
-                      onDelete={() => handleDeleteComment(item.id)}
+                      onDelete={() => requestDeleteComment(item.id)}
                       onToggleExpand={() => handleToggleExpand(item.id)}
                       isExpanded={expandedId === item.id}
                     />
@@ -298,7 +342,7 @@ export default function CommunityPage() {
                       onLike={() => handleLike(item.id)}
                       onOpen={() => handleToggleExpand(item.id)}
                       onUnshare={() => togglePrayerPublic(item.id, false).then(loadData)}
-                      onDelete={() => item.type === 'post' ? handleDeletePost(item.id) : handleDeletePrayer(item.id)}
+                      onDelete={() => item.type === 'post' ? requestDeletePost(item.id) : requestDeletePrayer(item.id)}
                       currentUserId={userId}
                     />
                   )}
@@ -341,7 +385,7 @@ export default function CommunityPage() {
                     type="post"
                     onLike={() => handleLike(post.id)}
                     onOpen={() => handleToggleExpand(post.id)}
-                    onDelete={() => handleDeletePost(post.id)}
+                    onDelete={() => requestDeletePost(post.id)}
                     currentUserId={userId}
                   />
                   {expandedId === post.id && (
@@ -369,7 +413,7 @@ export default function CommunityPage() {
                     onAmen={() => handleAmen(prayer.id)}
                     onOpen={() => handleToggleExpand(prayer.id)}
                     onUnshare={() => togglePrayerPublic(prayer.id, false).then(loadData)}
-                    onDelete={() => handleDeletePrayer(prayer.id)}
+                    onDelete={() => requestDeletePrayer(prayer.id)}
                     currentUserId={userId}
                   />
                   {expandedId === prayer.id && (
@@ -427,6 +471,30 @@ export default function CommunityPage() {
                   {posting ? "Posting..." : "Publish Topic"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal for Community Page */}
+      {deleteConfirmInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-cream-dark/40 backdrop-blur-sm" style={{ animation: "fadeIn 0.2s ease-out both" }}>
+          <div className="bg-ivory rounded-3xl p-6 shadow-2xl border border-brown/10 max-w-sm w-full" style={{ animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <h3 className="font-serif text-xl text-dark mb-2">{deleteConfirmInfo.title}</h3>
+            <p className="text-sm text-muted mb-6">{deleteConfirmInfo.desc}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteConfirmInfo(null)}
+                className="flex-1 px-4 py-3 bg-brown/5 text-brown text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-brown/10 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-3 bg-red-400/10 text-red-500 text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-red-400/20 transition"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -698,14 +766,20 @@ function VerseDiscussionCard({ item, currentUserId, onDelete, onToggleExpand, is
 function DiscussionExpansion({ postId, prayerId, verseCommentId, onClose }: { postId: string | null; prayerId: string | null; verseCommentId: string | null; onClose: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { userId } = useAuth();
+  const { user } = useUser();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setIsRefreshing(true);
     try {
       if (postId) {
         const d = await getForumPostWithReplies(postId);
@@ -721,30 +795,61 @@ function DiscussionExpansion({ postId, prayerId, verseCommentId, onClose }: { po
       console.error(err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  useEffect(() => { loadData(); }, [postId, prayerId, verseCommentId]);
+  useEffect(() => { 
+    loadData();
+    const interval = setInterval(() => loadData(true), 30000);
+    return () => clearInterval(interval);
+  }, [postId, prayerId, verseCommentId]);
 
   async function handlePostReply() {
     if (!reply.trim() || !userId) return;
+    
+    const replyText = reply;
+    setReply(""); // Clear immediately
     setPosting(true);
     setError(null);
+    
+    // Optimistic update
+    const tempId = `temp-${Date.now()}`;
+    const optimisticReply = {
+      id: tempId,
+      userId,
+      content: replyText,
+      createdAt: new Date().toISOString(),
+      profile: {
+        displayName: user?.fullName || user?.username || "You",
+        imageUrl: user?.imageUrl,
+      }
+    };
+    
+    setData((prev: any) => ({
+      ...prev,
+      replies: [...(prev?.replies || []), optimisticReply]
+    }));
+
     try {
-      if (postId) await postReply(postId, reply);
-      else if (prayerId) await postPrayerReply(prayerId, reply);
-      else if (verseCommentId) await postVerseReply(verseCommentId, reply);
-      setReply("");
-      loadData();
+      if (postId) await postReply(postId, replyText);
+      else if (prayerId) await postPrayerReply(prayerId, replyText);
+      else if (verseCommentId) await postVerseReply(verseCommentId, replyText);
+      loadData(true);
     } catch (err: any) {
       setError(err.message || "Could not post reply.");
+      // Rollback
+      setData((prev: any) => ({
+        ...prev,
+        replies: prev.replies.filter((r: any) => r.id !== tempId)
+      }));
+      setReply(replyText);
     } finally {
       setPosting(false);
     }
   }
 
   const handleDeleteReply = async (replyId: string) => {
-    if (!confirm("Delete this reply?")) return;
     setDeletingId(replyId);
     try {
       if (postId) await deleteForumReply(replyId);
@@ -781,11 +886,10 @@ function DiscussionExpansion({ postId, prayerId, verseCommentId, onClose }: { po
                 </div>
                 {userId && r.userId === userId && (
                   <button
-                    onClick={() => handleDeleteReply(r.id)}
-                    disabled={deletingId === r.id}
-                    className="opacity-0 group-hover/reply:opacity-100 transition-opacity text-[8px] uppercase tracking-widest text-red-400/60 hover:text-red-400"
+                    onClick={() => setConfirmDeleteId(r.id)}
+                    className="text-[9px] uppercase font-bold tracking-widest text-red-400/40 hover:text-red-400 transition-colors opacity-0 group-hover/reply:opacity-100"
                   >
-                    {deletingId === r.id ? "..." : "Delete"}
+                    delete
                   </button>
                 )}
               </div>
@@ -798,17 +902,45 @@ function DiscussionExpansion({ postId, prayerId, verseCommentId, onClose }: { po
         )}
       </div>
 
-      <div className="flex gap-2 items-center w-full overflow-hidden">
-        <input
+      {/* Delete Reply Confirmation Modal */}
+      {confirmDeleteId && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-cream-dark/40 backdrop-blur-sm rounded-2xl" style={{ animation: "fadeIn 0.2s ease-out both" }}>
+          <div className="bg-ivory rounded-2xl p-5 shadow-xl border border-brown/10 max-w-[280px] w-full" style={{ animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both" }}>
+            <h3 className="font-serif text-lg text-dark mb-1">Delete Reply?</h3>
+            <p className="text-[11px] text-muted mb-4 leading-relaxed">This action cannot be undone. It will be permanently removed.</p>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 py-2 bg-brown/5 text-brown text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-brown/10 transition"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  handleDeleteReply(confirmDeleteId);
+                  setConfirmDeleteId(null);
+                }}
+                className="flex-1 py-2 bg-red-400/10 text-red-500 text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-red-400/20 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Input */}
+      <div className="flex gap-2 pt-2 border-t border-brown/5">
+        <input 
           value={reply}
           onChange={(e) => setReply(e.target.value)}
-          placeholder="Write a respectful reply..."
-          className="flex-1 min-w-0 px-4 py-3 bg-ivory/50 border border-brown/10 rounded-xl text-base text-dark focus:outline-none focus:ring-1 focus:ring-brown/20"
+          placeholder="Share your thoughts..."
+          className="flex-1 px-4 py-2.5 bg-brown/5 border border-brown/10 rounded-xl text-sm text-dark focus:outline-none focus:ring-1 focus:ring-brown/20"
         />
-        <button
+        <button 
           onClick={handlePostReply}
           disabled={posting || !reply.trim()}
-          className="px-5 py-3 bg-brown text-ivory text-[10px] font-bold uppercase tracking-widest rounded-xl disabled:opacity-30 transition-all hover:scale-105 active:scale-95 shrink-0 whitespace-nowrap"
+          className="px-5 bg-brown text-ivory text-[10px] font-bold uppercase tracking-widest rounded-xl disabled:opacity-30 transition shrink-0"
         >
           {posting ? "..." : "Reply"}
         </button>
