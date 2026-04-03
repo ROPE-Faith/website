@@ -81,9 +81,10 @@ export default function SplashPage() {
           onPlaying={() => setVideoLoaded(true)}
           className="absolute inset-0 w-full h-full object-cover transition-opacity duration-[2000ms] ease-out pointer-events-none"
           style={{ opacity: phase >= 1 ? 0.75 : 0 }}
-          src="/mixkit-turning-the-pages-by-night-17384-hd-ready.mp4"
           aria-hidden="true"
-        />
+        >
+          <source src="/mixkit-turning-the-pages-by-night-17384-hd-ready.mp4" type="video/mp4" />
+        </video>
 
         {/* ─── Dark overlays for depth + readability ─── */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0804]/30 via-[#0a0804]/10 to-[#0a0804]/50 pointer-events-none" />
