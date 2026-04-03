@@ -29,6 +29,7 @@ export default function ClerkThemeWrapper({ children }: { children: React.ReactN
 
   return (
     <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
       appearance={{
         // Force the light theme (islands of ivory on whatever background)
         baseTheme: undefined, 
