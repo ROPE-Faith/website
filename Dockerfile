@@ -19,22 +19,15 @@ COPY . .
 # Next.js telemetry disable
 ENV NEXT_TELEMETRY_DISABLED 1
 
-# [NEW] Accept build arguments for public environment variables
-# These are baked into the JavaScript bundle at build time
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-ARG CLERK_PUBLISHABLE_KEY
-ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL
-ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL
-ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
-ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
-
-# [NEW] Set them as environment variables for the 'npm run build' process
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-ENV CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY
-ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_SIGN_IN_URL
-ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_URL
-ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
-ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
+# [NEW] Set public environment variables directly for the Next.js build process.
+# These will be baked into the standalone build for Edge and the browser bundle.
+# It's completely safe to hardcode these in the Dockerfile because they are public.
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3RpcnJpbmcta2F0eWRpZC0xMy5jbGVyay5hY2NvdW50cy5kZXYk
+ENV CLERK_PUBLISHABLE_KEY=pk_test_c3RpcnJpbmcta2F0eWRpZC0xMy5jbGVyay5hY2NvdW50cy5kZXYk
+ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/journal
+ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/journal
 
 # Build the application
 RUN npm run build
