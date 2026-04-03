@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-ivory p-6">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-ivory p-6 pt-32">
       <div className="w-full max-w-sm flex flex-col items-center gap-10 text-center">
         {/* Branding Header */}
         <Link href="/" className="inline-block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/20 rounded-lg p-2">
