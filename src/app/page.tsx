@@ -552,8 +552,8 @@ export default function SplashPage() {
           </button>
 
           <div className="mt-10 flex flex-col items-center gap-4">
-            <a 
-              href="https://github.com/Shubh-Bhakta/rope-app"
+            <a
+              href="https://github.com/ROPE-Faith/website"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-xs text-brown/60 hover:text-brown transition-colors group"
