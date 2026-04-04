@@ -22,8 +22,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # [NEW] Set public environment variables directly for the Next.js build process.
 # These will be baked into the standalone build for Edge and the browser bundle.
 # It's completely safe to hardcode these in the Dockerfile because they are public.
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3RpcnJpbmcta2F0eWRpZC0xMy5jbGVyay5hY2NvdW50cy5kZXYk
-ENV CLERK_PUBLISHABLE_KEY=pk_test_c3RpcnJpbmcta2F0eWRpZC0xMy5jbGVyay5hY2NvdW50cy5kZXYk
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsucm9wZWZhaXRoLmNvbSQ
+ENV CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsucm9wZWZhaXRoLmNvbSQ
 ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/journal
