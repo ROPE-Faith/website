@@ -378,6 +378,7 @@ function CommunityPage() {
                       onUnshare={() => togglePrayerPublic(item.id, false).then(loadData)}
                       onDelete={() => item.type === 'post' ? requestDeletePost(item.id) : requestDeletePrayer(item.id)}
                       currentUserId={userId}
+                      isExpanded={expandedId === item.id}
                     />
                   )}
                   {expandedId === item.id && (
@@ -421,6 +422,7 @@ function CommunityPage() {
                     onOpen={() => handleToggleExpand(post.id)}
                     onDelete={() => requestDeletePost(post.id)}
                     currentUserId={userId}
+                    isExpanded={expandedId === post.id}
                   />
                   {expandedId === post.id && (
                     <div className="ml-4 pl-4 border-l-2 border-brown/5 pt-2 pb-4 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -466,6 +468,7 @@ function CommunityPage() {
                     onUnshare={() => togglePrayerPublic(prayer.id, false).then(loadData)}
                     onDelete={() => requestDeletePrayer(prayer.id)}
                     currentUserId={userId}
+                    isExpanded={expandedId === prayer.id}
                   />
                   {expandedId === prayer.id && (
                     <div className="ml-4 pl-4 border-l-2 border-brown/5 pt-2 pb-4 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -642,7 +645,7 @@ function CommunityHelpModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function CommunityCard({ item, type, onAmen, onLike, onOpen, onUnshare, onDelete, currentUserId }: {
+function CommunityCard({ item, type, onAmen, onLike, onOpen, onUnshare, onDelete, currentUserId, isExpanded }: {
   item: any;
   type: 'prayer' | 'post';
   onAmen?: () => void;
@@ -651,6 +654,7 @@ function CommunityCard({ item, type, onAmen, onLike, onOpen, onUnshare, onDelete
   onUnshare?: () => void;
   onDelete?: () => void;
   currentUserId?: string | null;
+  isExpanded?: boolean;
 }) {
   const isAmen = item.userAmen;
   const isLiked = item.userLiked;
@@ -690,18 +694,28 @@ function CommunityCard({ item, type, onAmen, onLike, onOpen, onUnshare, onDelete
         {type === 'prayer' ? (
           <div className="space-y-4">
             <div className="relative">
-              <p className="text-sm text-dark leading-relaxed whitespace-pre-wrap italic opacity-80">{item.text}</p>
+              <p className={`text-sm text-dark leading-relaxed whitespace-pre-wrap italic opacity-80 ${!isExpanded ? "line-clamp-4" : ""}`}>{item.text}</p>
               <div className="absolute -left-4 top-0 bottom-0 w-0.5 bg-brown/10" />
             </div>
             {item.answeredNote && (
               <div className="p-4 bg-accent-gold/5 rounded-2xl border border-accent-gold/10">
                 <p className="text-[10px] text-accent-gold uppercase font-bold tracking-[0.2em] mb-2">The Provision</p>
-                <p className="text-sm text-dark-brown/90 leading-relaxed font-serif">{item.answeredNote}</p>
+                <p className={`text-sm text-dark-brown/90 leading-relaxed font-serif ${!isExpanded ? "line-clamp-3" : ""}`}>
+                  {item.answeredNote}
+                  {!isExpanded && item.answeredNote?.length > 180 && (
+                    <span className="text-accent-gold font-bold ml-1 text-[10px] uppercase tracking-tighter cursor-pointer">... (Story continues)</span>
+                  )}
+                </p>
               </div>
             )}
           </div>
         ) : (
-          <p className="text-sm text-dark leading-relaxed line-clamp-3 select-none whitespace-pre-wrap">{item.content}</p>
+          <p className={`text-sm text-dark leading-relaxed select-none whitespace-pre-wrap ${!isExpanded ? "line-clamp-3" : ""}`}>
+            {item.content}
+            {!isExpanded && item.content?.length > 180 && (
+              <span className="text-accent-gold font-bold ml-1 text-[10px] uppercase tracking-tighter cursor-pointer">... Read More</span>
+            )}
+          </p>
         )}
       </div>
 
@@ -798,7 +812,12 @@ function VerseDiscussionCard({ item, currentUserId, onDelete, onToggleExpand, is
             <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" /></svg>
           </div>
         </div>
-        <p className="text-sm text-dark leading-relaxed whitespace-pre-wrap">{item.content}</p>
+        <p className={`text-sm text-dark leading-relaxed whitespace-pre-wrap ${!isExpanded ? "line-clamp-3" : ""}`}>
+          {item.content}
+          {!isExpanded && item.content?.length > 180 && (
+            <span className="text-accent-gold font-bold ml-1 text-[10px] uppercase tracking-tighter cursor-pointer">... Read More</span>
+          )}
+        </p>
       </div>
 
       <div className="flex items-center gap-4 pt-4 border-t border-brown/5 pl-13">
