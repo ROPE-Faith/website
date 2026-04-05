@@ -350,7 +350,7 @@ export default function JournalPage() {
   const [completedPlan, setCompletedPlan] = useState<PlanProgress | null>(null);
   const [planSuggestedVerse, setPlanSuggestedVerse] = useState<string | null>(null);
 
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId: clerkUserId } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -588,7 +588,7 @@ export default function JournalPage() {
 
   function handleSave() {
     addRopeEntry({
-      userId: "local", // This will be overridden by Clerk on the server if authenticated
+      userId: clerkUserId || "local",
       revelationVerse: verseRef.trim(),
       revelationText: verseText,
       observation: observation.trim(),
