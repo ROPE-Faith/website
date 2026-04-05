@@ -1074,6 +1074,13 @@ export function markPrayerAnswered(id: string, note?: string): void {
     if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
     localStorage.setItem("rope_prayers", JSON.stringify(prayers));
     saveDbPrayer(prayers[idx]).catch(console.error);
+    
+    // Notify UI components
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rope-prayer-update", { 
+        detail: { prayers, updatedId: id } 
+      }));
+    }
   }
 }
 
@@ -1086,6 +1093,13 @@ export function setPrayerPublic(id: string, isPublic: boolean): void {
     if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
     localStorage.setItem("rope_prayers", JSON.stringify(prayers));
     saveDbPrayer(prayers[idx]).catch(console.error);
+    
+    // Notify UI components
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rope-prayer-update", { 
+        detail: { prayers, updatedId: id } 
+      }));
+    }
   }
 }
 
