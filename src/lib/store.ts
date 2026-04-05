@@ -295,9 +295,36 @@ export function addRopeEntry(
     saveRopeEntries(updated).catch(console.error);
     localStorage.setItem("rope_entries", JSON.stringify(updated));
     
+    // Also sync the Prayer component to the Prayer Wall
+    if (newEntry.prayer && newEntry.prayer.trim().length > 0) {
+      const prayerId = `prayer_${newEntry.id}`;
+      const prayers = getPrayers();
+      if (!prayers.some(p => p.id === prayerId)) {
+        const newPrayer: PrayerItem = {
+          id: prayerId,
+          text: newEntry.prayer,
+          verse: newEntry.revelationVerse,
+          createdAt: newEntry.createdAt,
+          answeredAt: null,
+          answeredNote: "",
+          isPublic: false,
+          publicAt: null,
+        };
+        prayers.unshift(newPrayer);
+        if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
+        localStorage.setItem("rope_prayers", JSON.stringify(prayers));
+        // We don't call saveDbPrayer here because saveDbEntry on the server now handles it
+      }
+    }
+
     if (isAuthenticated) {
       saveDbEntry(newEntry).catch(console.error);
     }
+
+    // Notify UI components
+    window.dispatchEvent(new CustomEvent("rope-entry-update", { 
+      detail: { entries: updated, newEntry } 
+    }));
   }
 
   return newEntry;
@@ -322,6 +349,11 @@ export function updateRopeEntry(
     if (isAuthenticated) {
       saveDbEntry(entries[index]).catch(console.error);
     }
+
+    // Notify UI components
+    window.dispatchEvent(new CustomEvent("rope-entry-update", { 
+      detail: { entries, updatedEntry: entries[index] } 
+    }));
   }
   
   return entries[index];
@@ -355,6 +387,11 @@ export function deleteRopeEntry(id: string, isAuthenticated: boolean = false): b
     if (isAuthenticated) {
       deleteDbEntry(id).catch(console.error);
     }
+
+    // Notify UI components
+    window.dispatchEvent(new CustomEvent("rope-entry-update", { 
+      detail: { entries: filtered, deletedId: id } 
+    }));
   }
   
   return true;
@@ -1017,6 +1054,14 @@ export function addPrayer(text: string, verse: string): PrayerItem {
   if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
   localStorage.setItem("rope_prayers", JSON.stringify(prayers));
   saveDbPrayer(prayer).catch(console.error);
+  
+  // Notify UI components
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("rope-prayer-update", { 
+      detail: { prayers, newPrayer: prayer } 
+    }));
+  }
+
   return prayer;
 }
 
@@ -1049,6 +1094,13 @@ export function deletePrayer(id: string): void {
   if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
   localStorage.setItem("rope_prayers", JSON.stringify(prayers));
   deleteDbPrayer(id).catch(console.error);
+  
+  // Notify UI components
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("rope-prayer-update", { 
+      detail: { prayers, deletedId: id } 
+    }));
+  }
 }
 
 // ─── Gratitude List ─────────────────────────────────────────────────────────

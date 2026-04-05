@@ -26,27 +26,51 @@ export async function getDbEntries() {
 }
 
 export async function saveDbEntry(entry: RopeEntry) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
 
-  await enforceRateLimit("saveDbEntry", "Standard");
-  const validated = RopeEntrySchema.parse(entry);
+    await enforceRateLimit("saveDbEntry", "Standard");
+    const validated = RopeEntrySchema.parse(entry);
 
-  const entryToSave = {
-    ...validated,
-    userId,
-    createdAt: new Date(validated.createdAt),
-    executionStatus: validated.executionStatus as "yes" | "partly" | "not_yet" | null,
-  };
+    const entryToSave = {
+      ...validated,
+      userId,
+      createdAt: new Date(validated.createdAt),
+      executionStatus: (validated.executionStatus || null) as "yes" | "partly" | "not_yet" | null,
+    };
 
-  await db.insert(entries)
-    .values(entryToSave)
-    .onConflictDoUpdate({
-      target: entries.id,
-      set: entryToSave,
+    await db.insert(entries)
+      .values(entryToSave)
+      .onConflictDoUpdate({
+        target: entries.id,
+        set: entryToSave,
+      });
+      
+    // Sync prayer if provided
+    if (validated.prayer && validated.prayer.trim().length > 0) {
+      await saveDbPrayer({
+        id: `prayer_${validated.id}`,
+        text: validated.prayer,
+        verse: validated.revelationVerse,
+        createdAt: validated.createdAt.toString(),
+        answeredAt: null,
+        answeredNote: "",
+        isPublic: false,
+        publicAt: null,
+      });
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error("Failed to save DB entry:", error);
+    await logErrorAction({
+      message: `saveDbEntry failed: ${error.message}`,
+      stack: error.stack,
+      context: { entryId: entry.id }
     });
-    
-  return true;
+    throw error; // Re-throw so caller can handle it
+  }
 }
 
 export async function deleteDbEntry(id: string) {

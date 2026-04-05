@@ -64,11 +64,27 @@ export default function MePage() {
       setMemoryVerses(e.detail.verses);
     };
 
+    const handleEntryUpdate = (e: any) => {
+      setEntries([...e.detail.entries]);
+      setStreakVal(getStreak(userId || "local"));
+      setUniqueBooks(getUniqueBooksCount(userId || "local"));
+      setTopBook(getMostCommonBook(userId || "local"));
+      setBookFreq(getBookFrequency(userId || "local"));
+    };
+
+    const handlePrayerUpdate = (e: any) => {
+      setAnsweredPrayers(e.detail.prayers.filter((p: PrayerItem) => !!p.answeredAt));
+    };
+
     window.addEventListener("rope-theme-toggle", handleCustomChange as any);
     window.addEventListener("rope-memory-update", handleMemoryChange as any);
+    window.addEventListener("rope-entry-update", handleEntryUpdate as any);
+    window.addEventListener("rope-prayer-update", handlePrayerUpdate as any);
     return () => {
       window.removeEventListener("rope-theme-toggle", handleCustomChange as any);
       window.removeEventListener("rope-memory-update", handleMemoryChange as any);
+      window.removeEventListener("rope-entry-update", handleEntryUpdate as any);
+      window.removeEventListener("rope-prayer-update", handlePrayerUpdate as any);
     };
   }, [isLoaded, userId]);
 
