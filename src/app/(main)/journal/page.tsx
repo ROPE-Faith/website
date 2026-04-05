@@ -479,10 +479,20 @@ export default function JournalPage() {
 
     checkIncoming();
 
+    const handleMemoryChange = (e: any) => {
+      if (verseRef) {
+        setIsMemoryVerse(e.detail.verses.some((mv: any) => mv.verse === verseRef));
+      }
+    };
+
     // Re-check when window refocuses or user navigates
     window.addEventListener('focus', checkIncoming);
-    return () => window.removeEventListener('focus', checkIncoming);
-  }, [isLoaded, todayKey, translation, pathname]);
+    window.addEventListener("rope-memory-update", handleMemoryChange as any);
+    return () => {
+      window.removeEventListener('focus', checkIncoming);
+      window.removeEventListener("rope-memory-update", handleMemoryChange as any);
+    };
+  }, [isLoaded, todayKey, translation, pathname, verseRef]);
 
   // Auto-save draft on field changes (debounced)
   useEffect(() => {

@@ -144,7 +144,7 @@ import {
   getDbGratitude, saveDbGratitude, deleteDbGratitude, syncGratitude,
   getDbPlanProgress, saveDbPlanProgress,
   getDbMemoryVerses, saveDbMemoryVerse, deleteDbMemoryVerse, syncMemoryVerses,
-  getDbSettings, saveDbSettings, clearAllDbData
+  getDbSettings, saveDbSettings, clearAllDbData, logErrorAction
 } from "./actions";
 
 let cachedEntries: RopeEntry[] | null = null;
@@ -1183,29 +1183,76 @@ export function getMemoryVerses(): { verse: string; text: string; addedAt: strin
   try { return JSON.parse(raw); } catch { return []; }
 }
 
-export function addMemoryVerse(verse: string, text: string): void {
+export async function addMemoryVerse(verse: string, text: string): Promise<void> {
   const item = { verse, text, addedAt: new Date().toISOString() };
-  const verses = getMemoryVerses();
-  if (verses.some(v => v.verse === verse)) return;
-  verses.unshift(item);
-  if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = verses;
-  localStorage.setItem("rope_memory_verses", JSON.stringify(verses));
+  const previousVerses = getMemoryVerses();
   
-  // Notify other components for immediate UI update
-  window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses } }));
+  if (previousVerses.some(v => v.verse === verse)) return;
   
-  saveDbMemoryVerse(item).catch(console.error);
+  const updatedVerses = [item, ...previousVerses];
+  
+  // Optimistic update
+  if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = updatedVerses;
+  localStorage.setItem("rope_memory_verses", JSON.stringify(updatedVerses));
+  
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses: updatedVerses } }));
+  }
+
+  try {
+    await saveDbMemoryVerse(item);
+  } catch (error: any) {
+    console.error("Failed to save memory verse, rolling back:", error);
+    
+    // Rollback
+    if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = previousVerses;
+    localStorage.setItem("rope_memory_verses", JSON.stringify(previousVerses));
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses: previousVerses, error: error.message } }));
+    }
+    
+    // Log error
+    await logErrorAction({
+      message: `addMemoryVerse failed: ${error.message}`,
+      context: { verse, text }
+    });
+  }
 }
 
-export function removeMemoryVerse(verse: string): void {
-  const verses = getMemoryVerses().filter(v => v.verse !== verse);
-  if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = verses;
-  localStorage.setItem("rope_memory_verses", JSON.stringify(verses));
+export async function removeMemoryVerse(verse: string): Promise<void> {
+  const previousVerses = getMemoryVerses();
+  const updatedVerses = previousVerses.filter(v => v.verse !== verse);
   
-  // Notify other components for immediate UI update
-  window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses } }));
+  if (previousVerses.length === updatedVerses.length) return;
+
+  // Optimistic update
+  if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = updatedVerses;
+  localStorage.setItem("rope_memory_verses", JSON.stringify(updatedVerses));
   
-  deleteDbMemoryVerse(verse).catch(console.error);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses: updatedVerses } }));
+  }
+
+  try {
+    await deleteDbMemoryVerse(verse);
+  } catch (error: any) {
+    console.error("Failed to delete memory verse, rolling back:", error);
+    
+    // Rollback
+    if (storeInitialized && cachedMemoryVerses) cachedMemoryVerses = previousVerses;
+    localStorage.setItem("rope_memory_verses", JSON.stringify(previousVerses));
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("rope-memory-update", { detail: { verses: previousVerses, error: error.message } }));
+    }
+
+    // Log error
+    await logErrorAction({
+      message: `removeMemoryVerse failed: ${error.message}`,
+      context: { verse }
+    });
+  }
 }
 
 // ─── Bible Highlights ───────────────────────────────────────────────────────
