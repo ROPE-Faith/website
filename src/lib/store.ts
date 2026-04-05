@@ -350,6 +350,23 @@ export function updateRopeEntry(
       saveDbEntry(entries[index]).catch(console.error);
     }
 
+    // Update corresponding prayer if it exists
+    if (updates.prayer) {
+      const prayerId = `prayer_${id}`;
+      const prayers = getPrayers();
+      const pIdx = prayers.findIndex(p => p.id === prayerId);
+      if (pIdx !== -1) {
+        prayers[pIdx].text = updates.prayer;
+        if (updates.revelationVerse) prayers[pIdx].verse = updates.revelationVerse;
+        if (storeInitialized && cachedPrayers) cachedPrayers = prayers;
+        localStorage.setItem("rope_prayers", JSON.stringify(prayers));
+        
+        window.dispatchEvent(new CustomEvent("rope-prayer-update", { 
+          detail: { prayers, updatedId: prayerId } 
+        }));
+      }
+    }
+
     // Notify UI components
     window.dispatchEvent(new CustomEvent("rope-entry-update", { 
       detail: { entries, updatedEntry: entries[index] } 
