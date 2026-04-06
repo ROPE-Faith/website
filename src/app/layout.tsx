@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
+import MigrationModal from "@/components/MigrationModal";
+
 export default function RootLayout({
   children,
 }: {
@@ -43,6 +45,7 @@ export default function RootLayout({
         <body className="min-h-screen bg-ivory text-dark antialiased">
           <Navbar />
           {children}
+          <MigrationModal />
         </body>
       </html>
     </ClerkThemeWrapper>
