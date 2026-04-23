@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import ClerkThemeWrapper from "@/components/ClerkThemeWrapper";
 import Navbar from "@/components/Navbar";
+import { SycrathRoot } from "@/components/SycrathRoot";
 
 export const metadata: Metadata = {
   title: "ROPE — Bible Journaling",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
-import MigrationModal from "@/components/MigrationModal";
+// import MigrationModal from "@/components/MigrationModal";
 
 export default function RootLayout({
   children,
@@ -43,9 +44,10 @@ export default function RootLayout({
           />
         </head>
         <body className="min-h-screen bg-ivory text-dark antialiased">
+          <SycrathRoot />
           <Navbar />
           {children}
-          <MigrationModal />
+          {/* <MigrationModal /> */}
         </body>
       </html>
     </ClerkThemeWrapper>
