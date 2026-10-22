@@ -1,7 +1,6 @@
 "use client";
 
 import { ClerkProvider } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
 
 /**
  * ClerkThemeWrapper
@@ -10,39 +9,21 @@ import { useEffect, useState } from "react";
  * This ensures all auth elements (Manage account, Sign out, etc.) are always readable as dark text on a light "card" island.
  */
 export default function ClerkThemeWrapper({ children }: { children: React.ReactNode }) {
-  // Keeping theme-awareness available for potential future refinements, 
-  // but hardcoding the appearance to light/ivory for reliability.
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const checkTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    checkTheme();
-    const observer = new MutationObserver(checkTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <ClerkProvider
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
       appearance={{
         // Force the light theme (islands of ivory on whatever background)
-        baseTheme: undefined, 
-        layout: {
+        options: {
           shimmer: true,
           socialButtonsVariant: "blockButton",
         },
         variables: {
           colorPrimary: "#5c4327", // ROPE Brown
-          colorText: "#2e2418",    // Dark Brown - Guaranteed visibility
+          colorForeground: "#2e2418", // Dark Brown - Guaranteed visibility
           colorBackground: "#f5efe3", // Ivory - Classic ROPE palette
-          colorInputBackground: "#ebe4d4",
-          colorInputText: "#2e2418",
+          colorInput: "#ebe4d4",
+          colorInputForeground: "#2e2418",
           borderRadius: "1rem",
         },
         elements: {
