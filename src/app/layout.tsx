@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClerkThemeWrapper from "@/components/ClerkThemeWrapper";
 import Navbar from "@/components/Navbar";
@@ -6,7 +6,12 @@ import Navbar from "@/components/Navbar";
 export const metadata: Metadata = {
   title: "ROPE — Bible Journaling",
   description: "A daily rhythm of Revelation, Observation, Prayer, and Execution.",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 // import MigrationModal from "@/components/MigrationModal";

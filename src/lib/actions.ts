@@ -40,24 +40,29 @@ export async function saveDbEntry(entry: RopeEntry) {
       executionStatus: (validated.executionStatus || null) as "yes" | "partly" | "not_yet" | null,
     };
 
-    await db.insert(entries)
+    const saved = await db.insert(entries)
       .values(entryToSave)
       .onConflictDoUpdate({
         target: entries.id,
         set: entryToSave,
-      });
+        setWhere: eq(entries.userId, userId),
+      }).returning({ id: entries.id });
+    if (saved.length === 0) throw new Error("This entry belongs to another account.");
       
     // Sync prayer if provided
     if (validated.prayer && validated.prayer.trim().length > 0) {
-      await saveDbPrayer({
+      const linkedPrayer = {
         id: `prayer_${validated.id}`,
+        userId,
         text: validated.prayer,
         verse: validated.revelationVerse,
-        createdAt: validated.createdAt.toString(),
-        answeredAt: null,
-        answeredNote: "",
-        isPublic: false,
-        publicAt: null,
+        createdAt: new Date(validated.createdAt),
+      };
+      // Entry edits and check-ins must preserve answered status, notes and sharing.
+      await db.insert(prayersTable).values(linkedPrayer).onConflictDoUpdate({
+        target: prayersTable.id,
+        set: { text: linkedPrayer.text, verse: linkedPrayer.verse },
+        setWhere: eq(prayersTable.userId, userId),
       });
     }
 
@@ -100,7 +105,7 @@ export async function syncEntries(localEntries: RopeEntry[]) {
       createdAt: new Date(validated.createdAt),
       executionStatus: validated.executionStatus as "yes" | "partly" | "not_yet" | null,
     };
-    await db.insert(entries).values(formatted).onConflictDoUpdate({ target: entries.id, set: formatted });
+    await db.insert(entries).values(formatted).onConflictDoUpdate({ target: entries.id, set: formatted, setWhere: eq(entries.userId, userId) });
   }
   return true;
 }
@@ -143,7 +148,7 @@ export async function saveDbPrayer(prayer: PrayerItem) {
     publicAt: validated.publicAt ? new Date(validated.publicAt) : null,
   };
 
-  await db.insert(prayersTable).values(toSave).onConflictDoUpdate({ target: prayersTable.id, set: toSave });
+  await db.insert(prayersTable).values(toSave).onConflictDoUpdate({ target: prayersTable.id, set: toSave, setWhere: eq(prayersTable.userId, userId) });
   return true;
 }
 
@@ -176,7 +181,7 @@ export async function syncPrayers(local: PrayerItem[]) {
       answeredAt: validated.answeredAt ? new Date(validated.answeredAt) : null,
       publicAt: validated.publicAt ? new Date(validated.publicAt) : null,
     };
-    await db.insert(prayersTable).values(toSave).onConflictDoUpdate({ target: prayersTable.id, set: toSave });
+    await db.insert(prayersTable).values(toSave).onConflictDoUpdate({ target: prayersTable.id, set: toSave, setWhere: eq(prayersTable.userId, userId) });
   }
   return true;
 }
@@ -268,7 +273,7 @@ export async function saveDbGratitude(item: GratitudeItem) {
   const validated = GratitudeItemSchema.parse(item);
   
   const toSave = { ...validated, userId, createdAt: new Date(validated.createdAt) };
-  await db.insert(gratitudeTable).values(toSave).onConflictDoUpdate({ target: gratitudeTable.id, set: toSave });
+  await db.insert(gratitudeTable).values(toSave).onConflictDoUpdate({ target: gratitudeTable.id, set: toSave, setWhere: eq(gratitudeTable.userId, userId) });
   return true;
 }
 
@@ -287,7 +292,7 @@ export async function syncGratitude(local: GratitudeItem[]) {
   for (const item of local) {
     const validated = GratitudeItemSchema.parse(item);
     const toSave = { ...validated, userId, createdAt: new Date(validated.createdAt) };
-    await db.insert(gratitudeTable).values(toSave).onConflictDoUpdate({ target: gratitudeTable.id, set: toSave });
+    await db.insert(gratitudeTable).values(toSave).onConflictDoUpdate({ target: gratitudeTable.id, set: toSave, setWhere: eq(gratitudeTable.userId, userId) });
   }
   return true;
 }

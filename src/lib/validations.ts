@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const dateSchema = z.string().refine(value => Number.isFinite(Date.parse(value)), "Invalid date").or(z.date());
+
 // ─── Entry Validations ───────────────────────────────────────────────────────
 
 export const RopeEntrySchema = z.object({
@@ -11,7 +13,7 @@ export const RopeEntrySchema = z.object({
   execution: z.string().min(1, "Please provide an execution").max(5000),
   executionStatus: z.enum(["yes", "partly", "not_yet"]).nullable().optional(),
   executionReflection: z.string().max(5000).optional().default(""),
-  createdAt: z.string().or(z.date()),
+  createdAt: dateSchema,
 });
 
 // ─── Prayer Validations ──────────────────────────────────────────────────────
@@ -22,9 +24,9 @@ export const PrayerItemSchema = z.object({
   verse: z.string().max(255).optional().default(""),
   answeredNote: z.string().max(5000).optional().default(""),
   isPublic: z.boolean().optional().default(false),
-  createdAt: z.string().or(z.date()),
-  answeredAt: z.string().or(z.date()).nullable().optional(),
-  publicAt: z.string().or(z.date()).nullable().optional(),
+  createdAt: dateSchema,
+  answeredAt: dateSchema.nullable().optional(),
+  publicAt: dateSchema.nullable().optional(),
 });
 
 export const BibleHighlightSchema = z.object({
@@ -32,19 +34,21 @@ export const BibleHighlightSchema = z.object({
   chapter: z.number().int().min(1).max(150),
   verse: z.number().int().min(1).max(200),
   color: z.enum(["gold", "green", "blue", "red"]),
-  createdAt: z.string().or(z.date()),
+  note: z.string().max(5000).optional().default(""),
+  createdAt: dateSchema,
 });
 
 export const GratitudeItemSchema = z.object({
   id: z.string().max(255),
   text: z.string().min(1, "Gratitude text is required").max(1000),
-  createdAt: z.string().or(z.date()),
+  verse: z.string().max(255).optional().default(""),
+  createdAt: dateSchema,
 });
 
 export const MemoryVerseSchema = z.object({
   verse: z.string().max(255),
   text: z.string().max(5000),
-  addedAt: z.string().or(z.date()),
+  addedAt: dateSchema,
 });
 
 export const UserSettingsSchema = z.object({

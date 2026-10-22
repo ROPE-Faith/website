@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { RopeEntry } from "@/lib/store";
+import { filterEntries } from "@/lib/entry-search";
 
 interface SearchEntriesProps {
   entries: RopeEntry[];
@@ -11,22 +12,11 @@ interface SearchEntriesProps {
 export default function SearchEntries({ entries, onFiltered }: SearchEntriesProps) {
   const [query, setQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    return entries.filter((entry) => {
-      const matchesQuery = !q ||
-        entry.revelationVerse.toLowerCase().includes(q) ||
-        entry.revelationText.toLowerCase().includes(q) ||
-        entry.observation.toLowerCase().includes(q) ||
-        entry.prayer.toLowerCase().includes(q) ||
-        entry.execution.toLowerCase().includes(q);
-
-      const matchesDate = !dateFilter || entry.createdAt.startsWith(dateFilter);
-
-      return matchesQuery && matchesDate;
-    });
-  }, [entries, query, dateFilter]);
+    return filterEntries(entries, query, dateFilter, statusFilter);
+  }, [entries, query, dateFilter, statusFilter]);
 
   useEffect(() => {
     onFiltered(filtered);
@@ -41,6 +31,7 @@ export default function SearchEntries({ entries, onFiltered }: SearchEntriesProp
           </div>
           <input
             type="text"
+            aria-label="Search journal entries"
             placeholder="Search verse, theme, or text..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -59,6 +50,7 @@ export default function SearchEntries({ entries, onFiltered }: SearchEntriesProp
         <div className="relative shrink-0">
           <input
             type="date"
+            aria-label="Filter journal entries by date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             className="w-full sm:w-auto px-4 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-base focus:outline-none focus:ring-1 focus:ring-brown/20 shadow-sm appearance-none"
@@ -66,11 +58,23 @@ export default function SearchEntries({ entries, onFiltered }: SearchEntriesProp
           {!dateFilter && <div className="absolute inset-0 pointer-events-none flex items-center px-4 text-muted/40 text-base">Filter by date</div>}
         </div>
       </div>
-      {(query || dateFilter) && (
+      <select
+        aria-label="Filter entries by check-in status"
+        value={statusFilter}
+        onChange={e => setStatusFilter(e.target.value)}
+        className="w-full sm:w-auto px-4 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-base"
+      >
+        <option value="">All check-ins</option>
+        <option value="pending">Awaiting check-in</option>
+        <option value="yes">Followed through</option>
+        <option value="partly">Partly followed through</option>
+        <option value="not_yet">Not yet</option>
+      </select>
+      {(query || dateFilter || statusFilter) && (
         <div className="flex items-center justify-between text-[11px] text-muted px-1">
-          <span>Found {filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
+          <span role="status">Found {filtered.length} {filtered.length === 1 ? "entry" : "entries"}</span>
           <button 
-            onClick={() => { setQuery(""); setDateFilter(""); }}
+            onClick={() => { setQuery(""); setDateFilter(""); setStatusFilter(""); }}
             className="text-brown hover:underline"
           >
             Clear filters

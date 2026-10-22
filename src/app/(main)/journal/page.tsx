@@ -13,7 +13,6 @@ import {
   TRANSLATIONS,
   getPlanSuggestedVerse,
   advancePlan,
-  getActivePlan,
   getReachedMilestone,
   getNextMilestone,
   addMemoryVerse,
@@ -27,6 +26,7 @@ import { OliveBranch } from "@/components/Accents";
 import ShareCard from "@/components/ShareCard";
 import Breathing from "@/components/Breathing";
 import PlanCompletionModal from "@/components/PlanCompletionModal";
+import { draftKey, EMPTY_DRAFT, hasDraftContent, readJournalDraft, writeJournalDraft, type JournalDraft } from "@/lib/journal-draft";
 
 const steps = [
   { letter: "R", word: "Revelation", placeholder: "" },
@@ -349,6 +349,12 @@ export default function JournalPage() {
   const [showPlanCompletion, setShowPlanCompletion] = useState(false);
   const [completedPlan, setCompletedPlan] = useState<PlanProgress | null>(null);
   const [planSuggestedVerse, setPlanSuggestedVerse] = useState<string | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [pendingPassage, setPendingPassage] = useState<{ ref: string; text: string; translation: string } | null>(null);
+  const restoredUser = useRef<string | null>(null);
+  const handledPassage = useRef<string | null>(null);
+  const lookupRequest = useRef(0);
 
   const { isLoaded, isSignedIn, userId: clerkUserId } = useAuth();
   const pathname = usePathname();
@@ -379,133 +385,93 @@ export default function JournalPage() {
   }, [isLoaded]);
 
   // ─── Draft persistence ─────────────────────────────────────────────────────
-  const todayKey = `rope_draft_${new Date().toISOString().split("T")[0]}`;
+  const currentUserId = clerkUserId || "local";
+  const draft: JournalDraft = { verseRef, verseText, observation, prayer, execution };
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
 
-  // Restore draft and check for incoming Bible verses (URL/Session)
+  function applyDraft(value: JournalDraft) {
+    latestDraft.current = value;
+    lookupRequest.current++;
+    setLookingUp(false);
+    setLookupError("");
+    setVerseRef(value.verseRef);
+    setVerseText(value.verseText);
+    setVerseLookedUp(!!value.verseText);
+    setObservation(value.observation);
+    setPrayer(value.prayer);
+    setExecution(value.execution);
+    setPrayerSuggestion(null);
+    setExecutionSuggestion(null);
+    setIsMemoryVerse(getMemoryVerses().some(v => v.verse === value.verseRef));
+  }
+
+  // Restore once per account. Refocusing the window must never replace live writing.
   useEffect(() => {
-    // Only run when loaded
-    if (!isLoaded) return;
-
-    function checkIncoming() {
-      // 1. Check URL Parameters (Highest Priority)
-      const urlVerse = searchParams.get("verse");
-      const urlText = searchParams.get("text");
-      const urlTrans = searchParams.get("t");
-
-      if (urlVerse) {
-        // Clear previous draft text to start fresh
-        setObservation("");
-        setPrayer("");
-        setExecution("");
-        setPrayerSuggestion(null);
-        setExecutionSuggestion(null);
-
-        setVerseRef(urlVerse);
-        if (urlText) {
-          setVerseText(urlText);
-          setVerseLookedUp(true);
-        } else {
-          // If text wasn't provided, we'd normally lookup, but bible/page.tsx provides it
-          setVerseLookedUp(false);
-          lookupVerse();
-        }
-
-        if (urlTrans) {
-          setTranslationState(urlTrans);
-          setTranslation(urlTrans);
-        }
-
-        // Check if it's already a memory verse
-        const memVerses = getMemoryVerses();
-        setIsMemoryVerse(memVerses.some(v => v.verse === urlVerse));
-
-        // Clean up URL to avoid re-applying on refresh
-        router.replace(pathname);
-
-        // Force scroll to top
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-
-        setPlanSuggestedVerse(getPlanSuggestedVerse());
-        return;
-      }
-
-      // 2. Check if Bible reader sent a verse via Session (Middle Priority)
-      try {
-        const bibleData = sessionStorage.getItem("rope_bible_to_journal");
-        if (bibleData) {
-          const { ref, text, translation: trans } = JSON.parse(bibleData);
-          sessionStorage.removeItem("rope_bible_to_journal");
-
-          setObservation("");
-          setPrayer("");
-          setExecution("");
-
-          setVerseRef(ref);
-          setVerseText(text);
-          setVerseLookedUp(true);
-
-          if (trans) {
-            setTranslationState(trans);
-            setTranslation(trans);
-          }
-
-          const memVerses = getMemoryVerses();
-          setIsMemoryVerse(memVerses.some(v => v.verse === ref));
-
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          setPlanSuggestedVerse(getPlanSuggestedVerse());
-          return;
-        }
-      } catch { /* ignore */ }
-
-      // 3. Restore draft (only if no incoming bible data)
-      try {
-        const raw = localStorage.getItem(todayKey);
-        if (raw) {
-          const d = JSON.parse(raw);
-          if (d.verseRef) setVerseRef(d.verseRef);
-          if (d.verseText) { setVerseText(d.verseText); setVerseLookedUp(true); }
-          if (d.observation) setObservation(d.observation);
-          if (d.prayer) setPrayer(d.prayer);
-          if (d.execution) setExecution(d.execution);
-
-          const memVerses = getMemoryVerses();
-          setIsMemoryVerse(memVerses.some(v => v.verse === d.verseRef));
-        }
-      } catch { /* ignore */ }
-
-      setPlanSuggestedVerse(getPlanSuggestedVerse());
+    if (!isLoaded || restoredUser.current === currentUserId) return;
+    restoredUser.current = currentUserId;
+    try {
+      const recovered = readJournalDraft(localStorage, currentUserId);
+      applyDraft(recovered || EMPTY_DRAFT);
+      setDraftMessage(recovered ? "Your unfinished entry has been restored." : "");
+    } catch {
+      setDraftMessage("Draft storage is unavailable. Keep this tab open until you save.");
     }
+    setDraftReady(true);
+    setPlanSuggestedVerse(getPlanSuggestedVerse());
+  }, [isLoaded, currentUserId]);
 
-    checkIncoming();
-
-    const handleMemoryChange = (e: any) => {
-      if (verseRef) {
-        setIsMemoryVerse(e.detail.verses.some((mv: any) => mv.verse === verseRef));
-      }
-    };
-
-    // Re-check when window refocuses or user navigates
-    window.addEventListener('focus', checkIncoming);
-    window.addEventListener("rope-memory-update", handleMemoryChange as any);
-    return () => {
-      window.removeEventListener('focus', checkIncoming);
-      window.removeEventListener("rope-memory-update", handleMemoryChange as any);
-    };
-  }, [isLoaded, todayKey, translation, pathname, verseRef]);
-
-  // Auto-save draft on field changes (debounced)
+  // Offer an incoming passage without erasing an unfinished entry.
   useEffect(() => {
-    if (saved) return; // don't save after explicit save
-    const timer = setTimeout(() => {
-      const draft = { verseRef, verseText, observation, prayer, execution };
-      // Only save if there's actual content
-      if (verseRef || observation || prayer || execution) {
-        localStorage.setItem(todayKey, JSON.stringify(draft));
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [verseRef, verseText, observation, prayer, execution, todayKey, saved]);
+    if (!draftReady) return;
+    const ref = searchParams.get("verse");
+    if (!ref) {
+      handledPassage.current = null;
+      return;
+    }
+    const signature = searchParams.toString();
+    if (handledPassage.current === signature) return;
+    handledPassage.current = signature;
+    setPendingPassage({ ref, text: searchParams.get("text") || "", translation: searchParams.get("t") || getTranslation() });
+    router.replace(pathname, { scroll: false });
+  }, [draftReady, searchParams, pathname, router]);
+
+  useEffect(() => {
+    if (!draftReady || saved || restoredUser.current !== currentUserId) return;
+    try {
+      writeJournalDraft(localStorage, currentUserId, latestDraft.current);
+    } catch {
+      setDraftMessage("Could not store your draft on this device. Keep this tab open until you save.");
+    }
+  }, [verseRef, verseText, observation, prayer, execution, currentUserId, draftReady, saved]);
+
+  useEffect(() => {
+    const handleMemoryChange = (event: Event) => {
+      const { verses } = (event as CustomEvent<{ verses: { verse: string }[] }>).detail;
+      setIsMemoryVerse(verses.some(v => v.verse === latestDraft.current.verseRef));
+    };
+    window.addEventListener("rope-memory-update", handleMemoryChange);
+    return () => window.removeEventListener("rope-memory-update", handleMemoryChange);
+  }, []);
+
+  async function useIncomingPassage() {
+    if (!pendingPassage) return;
+    const incoming = pendingPassage;
+    setPendingPassage(null);
+    setSaved(false);
+    // Keep the reader's observations and prayer when changing the passage.
+    const nextDraft = { ...latestDraft.current, verseRef: incoming.ref, verseText: incoming.text };
+    applyDraft(nextDraft);
+    const incomingTranslation = TRANSLATIONS.some(t => t.id === incoming.translation) ? incoming.translation : getTranslation();
+    setTranslationState(incomingTranslation);
+    setTranslation(incomingTranslation);
+    setDraftMessage("Passage updated. Your writing has been kept.");
+    if (!incoming.text) await lookupVerse(incoming.ref, incomingTranslation);
+  }
+
+  useEffect(() => {
+    if (pendingPassage && !hasDraftContent(latestDraft.current)) void useIncomingPassage();
+  }, [pendingPassage]);
 
   // Keyboard shortcuts: Cmd+Enter to save, Cmd+L to focus verse lookup
   const canSave = !!(verseRef.trim() && observation.trim() && prayer.trim() && execution.trim());
@@ -542,7 +508,10 @@ export default function JournalPage() {
   }, []);
 
   function handleVerseInput(value: string) {
+    lookupRequest.current++;
+    setLookingUp(false);
     setVerseRef(value);
+    setVerseText("");
     setVerseLookedUp(false);
     setLookupError("");
     const results = suggestBooks(value);
@@ -551,15 +520,15 @@ export default function JournalPage() {
   }
 
   function selectSuggestion(book: string) {
-    setVerseRef(book + " ");
+    handleVerseInput(book + " ");
     setShowSuggestions(false);
     setSuggestions([]);
     inputRef.current?.focus();
   }
 
-  async function lookupVerse() {
-    let ref = verseRef.trim();
-    if (!isQuickEntry) {
+  async function lookupVerse(incomingRef?: string, incomingTranslation?: string) {
+    let ref = incomingRef || verseRef.trim();
+    if (!incomingRef && !isQuickEntry) {
       if (!selectedBook || !selectedChapter) {
         setLookupError("Please select a book and enter a chapter.");
         return;
@@ -569,24 +538,28 @@ export default function JournalPage() {
     }
 
     if (!ref) return;
+    const request = ++lookupRequest.current;
     setLookingUp(true);
     setLookupError("");
     setVerseText("");
     try {
-      const text = await fetchVerse(ref, translation);
+      const text = await fetchVerse(ref, incomingTranslation || translation);
+      if (request !== lookupRequest.current) return;
       setVerseText(text);
       setVerseLookedUp(true);
       // Check if already a memory verse
       const memVerses = getMemoryVerses();
       setIsMemoryVerse(memVerses.some(v => v.verse === ref));
     } catch {
+      if (request !== lookupRequest.current) return;
       setLookupError("Could not find that verse. Try a format like 'John 3:16' or 'Romans 8:28'.");
     } finally {
-      setLookingUp(false);
+      if (request === lookupRequest.current) setLookingUp(false);
     }
   }
 
   function handleSave() {
+    if (!canSave || saved || lookingUp) return;
     addRopeEntry({
       userId: clerkUserId || "local",
       revelationVerse: verseRef.trim(),
@@ -596,13 +569,8 @@ export default function JournalPage() {
       execution: execution.trim(),
     }, isSignedIn || false);
 
-    // Advance reading plan if active
-    if (getActivePlan()) {
-      advancePlan();
-    }
-
     // Check for milestone
-    const currentStreak = getStreak("local");
+    const currentStreak = getStreak(currentUserId);
     const milestone = getReachedMilestone(currentStreak);
     if (milestone) {
       setMilestoneReached(milestone);
@@ -616,13 +584,15 @@ export default function JournalPage() {
     }
 
     setSavedCount((c) => c + 1);
+    try { localStorage.removeItem(draftKey(currentUserId)); } catch { /* Entry is already saved. */ }
+    setDraftMessage("");
     setSaved(true);
   }
 
   const allFilled = !!(verseRef.trim() && observation.trim() && prayer.trim() && execution.trim());
 
   if (saved) {
-    const currentStreak = getStreak("any");
+    const currentStreak = getStreak(currentUserId);
     const saveVerse = motivationalVerses[(savedCount - 1) % motivationalVerses.length];
 
     return (
@@ -719,12 +689,27 @@ export default function JournalPage() {
             onClose={() => setShowShare(false)}
           />
         )}
+        <PlanCompletionModal
+          isOpen={showPlanCompletion}
+          onClose={() => setShowPlanCompletion(false)}
+          progress={completedPlan}
+        />
       </div>
     );
   }
 
   return (
     <div className="px-5 pt-6 pb-8">
+      {pendingPassage && (
+        <div className="mb-5 p-4 card-surface rounded-xl border border-accent-gold/30" role="status">
+          <p className="text-sm text-dark">Use {pendingPassage.ref} for this entry? Your observations, prayer, and execution will be kept.</p>
+          <div className="flex flex-wrap gap-3 mt-3">
+            <button onClick={() => void useIncomingPassage()} className="px-3 py-2 bg-brown text-ivory rounded-lg text-sm">Use passage</button>
+            <button onClick={() => setPendingPassage(null)} className="px-3 py-2 text-brown text-sm">Keep current passage</button>
+          </div>
+        </div>
+      )}
+      {draftMessage && <p role="status" className="mb-4 text-sm text-brown">{draftMessage}</p>}
       {/* Date + Title with olive branch */}
       <div className="flex justify-between items-start mb-1">
         <p className="text-muted text-sm">{today}</p>
@@ -859,7 +844,7 @@ export default function JournalPage() {
                       ))}
                     </select>
                     <button
-                      onClick={lookupVerse}
+                      onClick={() => void lookupVerse()}
                       disabled={lookingUp || !verseRef.trim()}
                       className="px-4 py-2.5 bg-brown text-ivory rounded-xl text-sm font-medium hover:bg-brown-light disabled:opacity-40 transition shrink-0 w-full sm:w-auto"
                     >
@@ -919,7 +904,7 @@ export default function JournalPage() {
                       ))}
                     </select>
                     <button
-                      onClick={lookupVerse}
+                      onClick={() => void lookupVerse()}
                       disabled={lookingUp || !selectedBook || !selectedChapter}
                       className="flex-1 sm:flex-initial px-8 py-2.5 bg-brown text-ivory rounded-xl text-sm font-medium hover:bg-brown-light disabled:opacity-40 transition"
                     >
@@ -1162,7 +1147,7 @@ export default function JournalPage() {
         <button
           data-save-btn
           onClick={handleSave}
-          disabled={!allFilled}
+          disabled={!allFilled || lookingUp}
           className={`w-full py-3.5 btn-primary text-center text-base ${allFilled ? "animate-breathe" : ""}`}
         >
           Save Entry

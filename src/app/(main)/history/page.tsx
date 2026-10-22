@@ -84,6 +84,14 @@ export default function HistoryPage() {
                     <p className="text-xs text-dark/80 leading-relaxed font-medium">{entry.execution}</p>
                   </div>
                 )}
+                {entry.executionStatus && (
+                  <div className="pt-3 border-t border-brown/10">
+                    <span className="text-xs text-brown font-semibold">
+                      Check-in: {entry.executionStatus === "yes" ? "Followed through" : entry.executionStatus === "partly" ? "Partly followed through" : "Not yet"}
+                    </span>
+                    {entry.executionReflection && <p className="mt-2 text-sm text-dark/80 leading-relaxed whitespace-pre-wrap">{entry.executionReflection}</p>}
+                  </div>
+                )}
               </div>
             </div>
           ))

@@ -130,9 +130,8 @@ function generateAliasNumber(): number {
   return next;
 }
 
-function formatLocalDate(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
+import { formatLocalDate } from "./dates";
+import { mergeBackupItems, parseBackup } from "./backup";
 
 // ─── Entry Store ──────────────────────────────────────────────────────────
 
@@ -179,11 +178,11 @@ export async function initializeStore(isAuthenticated: boolean = false) {
         const localMemoryVerses = getMemoryVerses();
         
         await Promise.all([
-          syncEntries(localEntries).catch(console.error),
-          syncPrayers(localPrayers).catch(console.error),
-          syncGratitude(localGratitude).catch(console.error),
-          syncHighlights(localHighlights).catch(console.error),
-          syncMemoryVerses(localMemoryVerses).catch(console.error)
+          syncEntries(localEntries),
+          syncPrayers(localPrayers),
+          syncGratitude(localGratitude),
+          syncHighlights(localHighlights),
+          syncMemoryVerses(localMemoryVerses)
         ]);
         localStorage.setItem("rope_full_db_synced", "true");
       }
@@ -270,6 +269,13 @@ export function getRopeEntries(userId?: string): RopeEntry[] {
 
 export function clearCache(): void {
   cachedEntries = null;
+  cachedPrayers = null;
+  cachedHighlights = null;
+  cachedGratitude = null;
+  cachedPlan = null;
+  cachedMemoryVerses = null;
+  cachedSettings = null;
+  storeInitialized = false;
 }
 
 export function addRopeEntry(
@@ -464,7 +470,7 @@ export function getBookFrequency(userId: string): { book: string; count: number 
   for (const entry of entries) {
     const verse = entry.revelationVerse.trim();
     // Extract book name: everything before the first digit that follows a space
-    const match = verse.match(/^(.+?)\s*\d/);
+    const match = verse.match(/^(.+?)\s+\d/);
     const book = match ? match[1].trim() : verse;
     if (book) {
       freq[book] = (freq[book] || 0) + 1;
@@ -562,6 +568,7 @@ const BOLLS_TRANSLATION_MAP: Record<string, string> = {
  */
 export function parseVerseRef(ref: string): { bookNum: number; chapter: number; verses: number[] } | null {
   const trimmed = ref.trim();
+  if (trimmed.length > 2000) return null;
   // Match: "Book Chapter:VerseStuff" or "Book Chapter VerseStuff" (space/colon/comma)
   const match = trimmed.match(/^(.+?)\s+(\d+)(?:[ :]+(.+))?$/);
   if (!match) return null;
@@ -576,26 +583,24 @@ export function parseVerseRef(ref: string): { bookNum: number; chapter: number; 
     return nameLower === bookName || b.abbrevs.some(a => a === bookName);
   });
 
-  if (bookIndex === -1) return null;
+  if (bookIndex === -1 || chapter < 1 || chapter > BOOK_CHAPTERS[BIBLE_BOOKS[bookIndex].name]) return null;
 
   const verses: number[] = [];
   if (verseStuff) {
     // Parse complex ranges like "1-3,5,7-9"
     const parts = verseStuff.split(",");
     for (const part of parts) {
-      if (part.includes("-")) {
-        const [start, end] = part.split("-").map(v => parseInt(v.trim()));
-        if (!isNaN(start) && !isNaN(end)) {
-          for (let i = start; i <= end; i++) verses.push(i);
-        }
-      } else {
-        const v = parseInt(part.trim());
-        if (!isNaN(v)) verses.push(v);
-      }
+      const range = part.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
+      if (!range) return null;
+      const start = Number(range[1]);
+      const end = range[2] ? Number(range[2]) : start;
+      // Psalm 119 contains the most verses in a chapter (176).
+      if (start < 1 || end < start || end > 176) return null;
+      for (let i = start; i <= end; i++) verses.push(i);
     }
   }
 
-  return { bookNum: bookIndex + 1, chapter, verses };
+  return { bookNum: bookIndex + 1, chapter, verses: [...new Set(verses)].sort((a, b) => a - b) };
 }
 
 /**
@@ -943,12 +948,16 @@ export function advancePlan(): { progress: PlanProgress | null; newlyAdvanced: b
   const plan = READING_PLANS.find(p => p.id === progress.planId);
   if (!plan) return { progress, newlyAdvanced: false };
 
+  const today = formatLocalDate(new Date());
+  if (progress.paused || progress.lastAdvancedAt === today) {
+    return { progress, newlyAdvanced: false };
+  }
+
   // Add the current day to completed list if not already there
   if (!progress.completedDays.includes(progress.currentDay)) {
     progress.completedDays.push(progress.currentDay);
   }
 
-  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const alreadyAdvancedToday = progress.lastAdvancedAt === today;
   let newlyAdvanced = false;
 
@@ -993,7 +1002,7 @@ export function quitPlan(): void {
 }
 
 export function isPlanAdvancedToday(): boolean {
-  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const today = formatLocalDate(new Date());
   
   // Check active plan
   const active = getActivePlan();
@@ -1377,24 +1386,20 @@ export function getThemes(userId: string): string[] {
 
 export function exportData(): string {
   if (typeof window === "undefined") return "{}";
-  const data: Record<string, string | null> = {};
-  const keys = [
-    "rope_user",
-    "rope_entries",
-    "rope_prayers",
-    "rope_gratitude",
-    "rope_memory_verses",
-    "rope_bible_highlights",
-    "rope_active_plan",
-    "rope_translation",
-    "rope_dark_mode",
-    "rope_onboarding_done",
-    "rope_alias_counter"
-  ];
-
-  for (const key of keys) {
-    data[key] = localStorage.getItem(key);
-  }
+  // Cloud-loaded data may be newer than the localStorage mirror.
+  const data = {
+    rope_entries: JSON.stringify(getRopeEntries()),
+    rope_prayers: JSON.stringify(getPrayers()),
+    rope_gratitude: JSON.stringify(getGratitudeItems()),
+    rope_memory_verses: JSON.stringify(getMemoryVerses()),
+    rope_bible_highlights: JSON.stringify(getBibleHighlights()),
+    rope_active_plan: localStorage.getItem("rope_active_plan"),
+    rope_plan_history: JSON.stringify(getPlanHistory()),
+    rope_bible_history: JSON.stringify(getBibleHistory()),
+    rope_translation: getTranslation(),
+    rope_dark_mode: JSON.stringify(getDarkMode()),
+    rope_onboarding_done: JSON.stringify(hasCompletedOnboarding()),
+  };
 
   return JSON.stringify({
     version: "1.0",
@@ -1403,22 +1408,80 @@ export function exportData(): string {
   }, null, 2);
 }
 
-export function importData(jsonString: string): { success: boolean; error?: string } {
+export async function importData(jsonString: string, userId = "local", isAuthenticated = false): Promise<{ success: boolean; error?: string }> {
   try {
-    const parsed = JSON.parse(jsonString);
-    if (!parsed.data || typeof parsed.data !== "object") {
-      return { success: false, error: "Invalid data format" };
+    const data = parseBackup(jsonString);
+    const entryIds = new Map<string, string>();
+    const importedEntries = (data.rope_entries as RopeEntry[] | undefined)?.map(entry => {
+      const id = entry.userId === userId ? entry.id : `${entry.id.slice(0, 160)}_import_${userId.slice(-80)}`;
+      entryIds.set(entry.id, id);
+      return { ...entry, id, userId };
+    });
+    if (importedEntries) data.rope_entries = mergeBackupItems(getRopeEntries(), importedEntries, entry => entry.id);
+    if (data.rope_prayers) {
+      const imported = (data.rope_prayers as PrayerItem[]).map(prayer => {
+        const linkedId = prayer.id.startsWith("prayer_") ? entryIds.get(prayer.id.slice(7)) : undefined;
+        const id = linkedId ? `prayer_${linkedId}` : getPrayers().some(p => p.id === prayer.id) ? prayer.id : `${prayer.id.slice(0, 160)}_import_${userId.slice(-80)}`;
+        return { ...prayer, id };
+      });
+      data.rope_prayers = mergeBackupItems(getPrayers(), imported, prayer => prayer.id);
+    }
+    if (data.rope_gratitude) {
+      const current = getGratitudeItems();
+      const imported = (data.rope_gratitude as GratitudeItem[]).map(item => ({
+        ...item, id: current.some(existing => existing.id === item.id) ? item.id : `${item.id.slice(0, 160)}_import_${userId.slice(-80)}`,
+      }));
+      data.rope_gratitude = mergeBackupItems(current, imported, item => item.id);
+    }
+    if (data.rope_bible_highlights) data.rope_bible_highlights = mergeBackupItems(getBibleHighlights(), data.rope_bible_highlights as BibleHighlight[], h => `${h.book}:${h.chapter}:${h.verse}`);
+    if (data.rope_memory_verses) data.rope_memory_verses = mergeBackupItems(getMemoryVerses(), data.rope_memory_verses as { verse: string; text: string; addedAt: string }[], v => v.verse);
+    if (data.rope_plan_history) data.rope_plan_history = mergeBackupItems(getPlanHistory(), data.rope_plan_history as PlanProgress[], p => `${p.planId}:${p.startedAt}`);
+
+    // Save a recoverable local copy before attempting the network.
+    const previous = new Map(Object.keys(data).map(key => [key, localStorage.getItem(key)]));
+    try {
+      for (const [key, value] of Object.entries(data)) {
+        localStorage.setItem(key, key === "rope_translation" ? value as string : JSON.stringify(value));
+      }
+    } catch (error) {
+      for (const [key, value] of previous) {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      }
+      throw error;
     }
 
-    Object.entries(parsed.data).forEach(([key, value]) => {
-      if (typeof value === "string") {
-        localStorage.setItem(key, value);
-      }
-    });
+    if (data.rope_entries) {
+      cachedEntries = data.rope_entries as RopeEntry[];
+      await saveRopeEntries(cachedEntries).catch(console.error);
+    }
+    if (data.rope_prayers) cachedPrayers = data.rope_prayers as PrayerItem[];
+    if (data.rope_gratitude) cachedGratitude = data.rope_gratitude as GratitudeItem[];
+    if (data.rope_bible_highlights) cachedHighlights = data.rope_bible_highlights as BibleHighlight[];
+    if (data.rope_memory_verses) cachedMemoryVerses = data.rope_memory_verses as { verse: string; text: string; addedAt: string }[];
+    cachedSettings = {
+      darkMode: data.rope_dark_mode as boolean ?? getDarkMode(),
+      translation: data.rope_translation as string ?? getTranslation(),
+      onboardingComplete: data.rope_onboarding_done as boolean ?? hasCompletedOnboarding(),
+      lastRead: data.rope_bible_history as BibleHistoryItem[] ?? getBibleHistory(),
+    };
+
+    if (isAuthenticated) {
+      await Promise.all([
+        ...(data.rope_entries ? [syncEntries(data.rope_entries as RopeEntry[])] : []),
+        ...(data.rope_prayers ? [syncPrayers(data.rope_prayers as PrayerItem[])] : []),
+        ...(data.rope_gratitude ? [syncGratitude(data.rope_gratitude as GratitudeItem[])] : []),
+        ...(data.rope_bible_highlights ? [syncHighlights(data.rope_bible_highlights as BibleHighlight[])] : []),
+        ...(data.rope_memory_verses ? [syncMemoryVerses(data.rope_memory_verses as { verse: string; text: string; addedAt: string }[])] : []),
+        ...(data.rope_active_plan ? [saveDbPlanProgress(data.rope_active_plan as PlanProgress)] : []),
+        saveDbSettings(cachedSettings),
+      ]);
+    }
 
     return { success: true };
   } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : "Unknown error" };
+    console.error("Backup import failed", e);
+    return { success: false, error: "The backup could not be fully restored. Check that it is a valid ROPE backup and that you are connected, then try again. Any data already restored is kept on this device." };
   }
 }
 
@@ -1442,6 +1505,7 @@ export async function clearAllData(cloud: boolean = false): Promise<void> {
     "rope_memory_verses",
     "rope_bible_highlights",
     "rope_active_plan",
+    "rope_plan_history",
     "rope_translation",
     "rope_dark_mode",
     "rope_onboarding_done",
@@ -1450,6 +1514,10 @@ export async function clearAllData(cloud: boolean = false): Promise<void> {
     "rope_full_db_synced",
     "rope_entries_migrated"
   ];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith("rope_journal_draft_") || /^rope_draft_\d{4}-\d{2}-\d{2}$/.test(key))) keys.push(key);
+  }
   keys.forEach(key => localStorage.removeItem(key));
   
   // Clear indexedDB if needed

@@ -275,3 +275,18 @@ textarea:focus, input:focus {
   border-color: #c4a265 !important;
   box-shadow: 0 0 0 3px rgba(196, 162, 101, 0.1) !important;
 }
+
+/* Make keyboard navigation visible across the app's custom controls. */
+:where(button, a, select, input, textarea):focus-visible {
+  outline: 2px solid var(--color-brown);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -4,9 +4,10 @@ import { useAuth } from "@clerk/nextjs";
 import { exportData, importData, clearAllData } from "@/lib/store";
 
 export default function DataManagement() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
   const [importStatus, setImportStatus] = useState<{ success?: boolean; error?: string } | null>(null);
   const [showConfirmClear, setShowConfirmClear] = useState(false);
+  const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
@@ -20,25 +21,40 @@ export default function DataManagement() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const result = importData(content);
+    e.target.value = "";
+    if (file.size > 20 * 1024 * 1024) {
+      setImportStatus({ error: "Choose a ROPE backup smaller than 20 MB." });
+      return;
+    }
+    setBusy(true);
+    setImportStatus(null);
+    try {
+      const result = await importData(await file.text(), userId || "local", !!isSignedIn);
       setImportStatus(result);
       if (result.success) {
         setTimeout(() => window.location.reload(), 1500);
       }
-    };
-    reader.readAsText(file);
+    } catch {
+      setImportStatus({ error: "Could not read this file. Please try again." });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleClear = async (cloud: boolean = false) => {
-    await clearAllData(cloud);
-    window.location.reload();
+    setBusy(true);
+    setImportStatus(null);
+    try {
+      await clearAllData(cloud);
+      window.location.reload();
+    } catch {
+      setImportStatus({ error: "Could not clear your data. Please check your connection and try again." });
+      setBusy(false);
+    }
   };
 
   return (
@@ -55,6 +71,7 @@ export default function DataManagement() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             onClick={handleExport}
+            disabled={busy}
             className="flex items-center justify-center gap-2 px-6 py-3.5 bg-brown text-ivory rounded-xl text-sm font-semibold hover:bg-brown-light transition shadow-sm active:scale-[0.98]"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -67,6 +84,7 @@ export default function DataManagement() {
 
           <button
             onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
             className="flex items-center justify-center gap-2 px-6 py-3.5 bg-cream-dark/40 text-brown border border-brown/10 rounded-xl text-sm font-semibold hover:bg-cream-dark/60 transition active:scale-[0.98]"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -74,7 +92,7 @@ export default function DataManagement() {
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            Import Backup
+            {busy ? "Working…" : "Import Backup"}
           </button>
           <input
             ref={fileInputRef}
@@ -86,11 +104,11 @@ export default function DataManagement() {
         </div>
 
         {importStatus && (
-          <div className={`mt-5 p-4 rounded-xl text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${importStatus.success ? "bg-[#6d8c5c15] text-[#6d8c5c] border border-[#6d8c5c20]" : "bg-[#b86b4e15] text-[#b86b4e] border border-[#b86b4e20]"}`}>
+          <div role="status" className={`mt-5 p-4 rounded-xl text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${importStatus.success ? "bg-[#6d8c5c15] text-[#6d8c5c] border border-[#6d8c5c20]" : "bg-[#b86b4e15] text-[#b86b4e] border border-[#b86b4e20]"}`}>
             {importStatus.success ? (
               <>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                <span>Import successful! Re-syncing your journey...</span>
+                <span>Backup restored. Existing entries and newer edits have been kept. Refreshing…</span>
               </>
             ) : (
               <>
@@ -122,6 +140,7 @@ export default function DataManagement() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => handleClear()}
+                disabled={busy}
                 className="px-5 py-2.5 bg-cream-dark/40 text-muted rounded-xl text-xs font-semibold hover:bg-cream-dark/60 transition"
               >
                 Clear This Device Only
@@ -129,6 +148,7 @@ export default function DataManagement() {
               
               {isSignedIn && (
                 <button
+                  disabled={busy}
                   onClick={() => {
                     if (confirm("THIS IS IRREVERSIBLE. This will delete all your entries from the cloud forever. Proceed?")) {
                       handleClear(true);
@@ -149,7 +169,7 @@ export default function DataManagement() {
             </div>
             {isSignedIn && (
               <p className="text-[10px] text-muted italic">
-                &quot;Delete Everywhere&quot; will permanently wipe your Neon database entries for this account.
+                &quot;Delete Everywhere&quot; permanently removes the saved journal data for this account.
               </p>
             )}
           </div>

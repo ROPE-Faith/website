@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { 
   BIBLE_BOOKS, 
@@ -67,6 +67,7 @@ function BibleContent() {
   const [commentPreviews, setCommentPreviews] = useState<Record<string, any>>({});
   const [memoryVerses, setMemoryVerses] = useState<{ verse: string; text: string }[]>([]);
   const { userId: currentUserId } = useAuth();
+  const chapterRequest = useRef(0);
 
   const maxChapter = BOOK_CHAPTERS[book] || 1;
 
@@ -126,6 +127,7 @@ function BibleContent() {
   // Fetch chapter when book/chapter/translation changes
   const loadChapter = useCallback(async (silent = false) => {
     if (isInitializing) return;
+    const request = silent ? chapterRequest.current : ++chapterRequest.current;
     
     if (!silent) {
       setLoading(true);
@@ -137,6 +139,7 @@ function BibleContent() {
     try {
       if (!silent) {
         const data = await fetchChapterVerses(book, chapter, translation);
+        if (request !== chapterRequest.current) return;
         setVerses(data);
         setHighlights(getHighlightsForChapter(book, chapter));
       }
@@ -144,6 +147,7 @@ function BibleContent() {
       // Fetch previews if in community mode
       if (communityMode) {
         const cp = await getChapterCommentPreviews(book, chapter.toString());
+        if (request !== chapterRequest.current) return;
         setCommentPreviews(cp);
       } else if (!silent) {
         setCommentPreviews({});
@@ -154,19 +158,22 @@ function BibleContent() {
         setHistory(getBibleHistory());
       }
     } catch {
-      if (!silent) {
+      if (!silent && request === chapterRequest.current) {
         setError("Could not load chapter. Try a different translation.");
         setVerses([]);
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent && request === chapterRequest.current) setLoading(false);
     }
   }, [book, chapter, translation, communityMode, isInitializing]);
 
   useEffect(() => {
     loadChapter();
     const interval = setInterval(() => loadChapter(true), 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      chapterRequest.current++;
+    };
   }, [loadChapter]);
 
   function changePassage(newBook: string, newChapter: number) {
@@ -199,8 +206,8 @@ function BibleContent() {
     ? BIBLE_BOOKS.filter(b => b.name.toLowerCase().includes(bookSearch.toLowerCase()))
     : BIBLE_BOOKS;
 
-  const otBooks = filteredBooks.slice(0, 39);
-  const ntBooks = filteredBooks.slice(39);
+  const otBooks = filteredBooks.filter(b => BIBLE_BOOKS.indexOf(b) < 39);
+  const ntBooks = filteredBooks.filter(b => BIBLE_BOOKS.indexOf(b) >= 39);
 
   return (
     <div className="px-5 pt-6 pb-8" style={{ animation: "fadeIn 0.4s ease-out both" }}>

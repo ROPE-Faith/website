@@ -13,18 +13,16 @@ export default function CheckinPage() {
   const [saved, setSaved] = useState(false);
   const [streak, setStreakVal] = useState(0);
 
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
 
   useEffect(() => {
     if (!isLoaded) return;
-    const userId = "any"; 
-    const yesterday = getYesterdayEntry(userId);
-    if (yesterday && yesterday.executionStatus === null) {
-      setEntry(yesterday);
-    }
-    setStreakVal(getStreak(userId));
+    const currentUserId = userId || "local";
+    const yesterday = getYesterdayEntry(currentUserId);
+    setEntry(yesterday?.executionStatus === null ? yesterday : null);
+    setStreakVal(getStreak(currentUserId));
     setLoaded(true);
-  }, [isLoaded]);
+  }, [isLoaded, userId]);
 
   function handleSave() {
     if (!entry || !status) return;
