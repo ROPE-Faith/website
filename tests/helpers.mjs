@@ -21,6 +21,7 @@ export function createLoader({ storage = new MemoryStorage(), mocks = {}, global
   const cache = new Map();
   const events = [];
   const context = vm.createContext({
+    AbortSignal,
     console: { ...console, error() {} },
     localStorage: storage,
     window: { dispatchEvent: event => events.push(event), matchMedia: () => ({ matches: false }) },

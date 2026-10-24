@@ -9,42 +9,24 @@ import {
   setTranslation as saveTranslation, 
   TRANSLATIONS, 
   fetchChapterVerses, 
-  getHighlightsForChapter, 
-  addBibleHighlight, 
-  removeBibleHighlight, 
   getBibleHistory,
   updateBibleHistory,
-  addMemoryVerse,
-  removeMemoryVerse,
-  getMemoryVerses,
-  type BibleHighlight 
 } from "@/lib/store";
-import { getPublicHighlights, addPublicHighlight, getChapterCommentPreviews, getVerseComments, postVerseComment, voteComment, deleteVerseComment } from "@/lib/community-actions";
+import { getChapterCommentPreviews, getVerseComments, postVerseComment, voteComment, deleteVerseComment } from "@/lib/community-actions";
 import { useAuth, useUser } from "@clerk/nextjs";
-
-const HIGHLIGHT_COLORS = [
-  { id: "gold", bg: "rgba(196,162,101,0.2)", border: "rgba(196,162,101,0.4)", label: "Gold" },
-  { id: "green", bg: "rgba(34,139,34,0.15)", border: "rgba(34,139,34,0.35)", label: "Green" },
-  { id: "blue", bg: "rgba(70,130,180,0.15)", border: "rgba(70,130,180,0.35)", label: "Blue" },
-  { id: "red", bg: "rgba(178,34,34,0.15)", border: "rgba(178,34,34,0.35)", label: "Red" },
-] as const;
-
-function getHighlightStyle(color: string) {
-  return HIGHLIGHT_COLORS.find(c => c.id === color) || HIGHLIGHT_COLORS[0];
-}
-
-interface VerseData {
-  verse: number;
-  text: string;
-}
+import StudyReader from "@/components/bible/StudyReader";
+import { isTranslation, type VerseData } from "@/lib/scripture";
 
 function BibleContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
-  const urlBook = searchParams.get("b");
-  const urlChapter = parseInt(searchParams.get("c") || "1");
+  const requestedBook = searchParams.get("b");
+  const urlBook = BIBLE_BOOKS.some(b => b.name === requestedBook) ? requestedBook : null;
+  const parsedChapter = Number(searchParams.get("c") || "1");
+  const urlChapter = Number.isInteger(parsedChapter) && parsedChapter > 0 && parsedChapter <= (BOOK_CHAPTERS[urlBook || "John"] || 1) ? parsedChapter : 1;
+  const urlTranslation = searchParams.get("t");
   const urlMode = searchParams.get("m");
 
   const [book, setBook] = useState(urlBook || "John");
@@ -55,17 +37,13 @@ function BibleContent() {
   const [verses, setVerses] = useState<VerseData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBookPicker, setShowBookPicker] = useState(false);
   const [bookSearch, setBookSearch] = useState("");
   const [history, setHistory] = useState<any[]>([]);
   const [chaptersExpanded, setChaptersExpanded] = useState(false);
   const [showDiscussion, setShowDiscussion] = useState(false);
-  const [publicHighlightsData, setPublicHighlightsData] = useState<any[]>([]);
   const [commentPreviews, setCommentPreviews] = useState<Record<string, any>>({});
-  const [memoryVerses, setMemoryVerses] = useState<{ verse: string; text: string }[]>([]);
   const { userId: currentUserId } = useAuth();
   const chapterRequest = useRef(0);
 
@@ -83,7 +61,7 @@ function BibleContent() {
 
   // Load initial translation preference and history
   useEffect(() => {
-    setTranslationState(getTranslation());
+    setTranslationState(urlTranslation && isTranslation(urlTranslation) ? urlTranslation : getTranslation());
     
     const hist = getBibleHistory();
     setHistory(hist);
@@ -103,17 +81,11 @@ function BibleContent() {
     }
     setIsInitializing(false);
 
-    setMemoryVerses(getMemoryVerses());
-
-    const handleMemoryChange = (e: any) => {
-      setMemoryVerses(e.detail.verses);
-    };
-
-    window.addEventListener("rope-memory-update", handleMemoryChange as any);
-    return () => {
-      window.removeEventListener("rope-memory-update", handleMemoryChange as any);
-    };
   }, []);
+
+  useEffect(() => {
+    if (urlTranslation && isTranslation(urlTranslation)) setTranslationState(urlTranslation);
+  }, [urlTranslation]);
 
   // Sync URL when state changes
   const syncUrl = useCallback((newBook: string, newChapter: number, isCommunity: boolean) => {
@@ -121,8 +93,10 @@ function BibleContent() {
     params.set("b", newBook);
     params.set("c", newChapter.toString());
     params.set("m", isCommunity ? "community" : "personal");
+    params.set("t", translation);
+    params.delete("h");
     router.replace(`${pathname}?${params.toString()}`);
-  }, [searchParams, pathname, router]);
+  }, [searchParams, pathname, router, translation]);
 
   // Fetch chapter when book/chapter/translation changes
   const loadChapter = useCallback(async (silent = false) => {
@@ -133,7 +107,6 @@ function BibleContent() {
       setLoading(true);
       setError("");
       setSelectedVerse(null);
-      setShowColorPicker(false);
     }
 
     try {
@@ -141,7 +114,6 @@ function BibleContent() {
         const data = await fetchChapterVerses(book, chapter, translation);
         if (request !== chapterRequest.current) return;
         setVerses(data);
-        setHighlights(getHighlightsForChapter(book, chapter));
       }
       
       // Fetch previews if in community mode
@@ -157,9 +129,9 @@ function BibleContent() {
         updateBibleHistory(book, chapter);
         setHistory(getBibleHistory());
       }
-    } catch {
+    } catch (cause) {
       if (!silent && request === chapterRequest.current) {
-        setError("Could not load chapter. Try a different translation.");
+        setError(cause instanceof Error ? cause.message : "Could not load this chapter. Please try again.");
         setVerses([]);
       }
     } finally {
@@ -189,19 +161,6 @@ function BibleContent() {
     syncUrl(book, chapter, isCommunity);
   }
 
-  function handleHighlight(verseNum: number, color: string) {
-    const existing = highlights.find(h => h.verse === verseNum);
-    if (existing && existing.color === color) {
-      removeBibleHighlight(book, chapter, verseNum);
-    } else {
-      addBibleHighlight(book, chapter, verseNum, color);
-    }
-    setHighlights(getHighlightsForChapter(book, chapter));
-    setShowColorPicker(false);
-    setSelectedVerse(null);
-  }
-
-
   const filteredBooks = bookSearch
     ? BIBLE_BOOKS.filter(b => b.name.toLowerCase().includes(bookSearch.toLowerCase()))
     : BIBLE_BOOKS;
@@ -218,12 +177,17 @@ function BibleContent() {
           <p className="text-muted text-sm">Read, highlight, journal</p>
         </div>
         <select
+          aria-label="Bible translation"
           value={translation}
-          onChange={(e) => { setTranslationState(e.target.value); saveTranslation(e.target.value); }}
-          className="px-2 py-1.5 bg-ivory border border-brown/10 rounded-lg text-dark text-base focus:outline-none"
+          onChange={(e) => {
+            const value = e.target.value; setTranslationState(value); saveTranslation(value);
+            const params = new URLSearchParams(searchParams.toString()); params.set("t", value); params.delete("h");
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+          }}
+          className="max-w-[50%] min-h-11 px-2 py-1.5 bg-ivory border border-brown/10 rounded-lg text-dark text-sm focus:outline-none"
         >
           {TRANSLATIONS.map(t => (
-            <option key={t.id} value={t.id}>{t.label}</option>
+            <option key={t.id} value={t.id}>{t.label} — {t.name}</option>
           ))}
         </select>
       </div>
@@ -376,207 +340,27 @@ function BibleContent() {
         </div>
       )}
       {error && (
-        <div className="text-center py-12 px-6 bg-red-400/5 rounded-2xl border border-red-400/10">
+        <div role="alert" className="text-center py-12 px-6 bg-red-400/5 rounded-2xl border border-red-400/10">
           <p className="text-red-400/80 text-sm mb-4">{error}</p>
           <button onClick={() => loadChapter()} className="text-xs text-red-500 font-medium underline underline-offset-4">Try again</button>
         </div>
       )}
 
-      {/* Verses */}
-      {!loading && !error && verses.length > 0 && (
-        <div className="space-y-0.5 mb-8">
-          {verses.map(v => {
-            const highlight = highlights.find(h => h.verse === v.verse);
-            const hStyle = !communityMode && highlight ? getHighlightStyle(highlight.color) : null;
-            
-            const isSelected = selectedVerse === v.verse;
-
-            return (
-              <div key={v.verse} className="relative">
-                <div
-                  onClick={() => {
-                    if (selectedVerse === v.verse) {
-                      setSelectedVerse(null);
-                      setShowColorPicker(false);
-                    } else {
-                      setSelectedVerse(v.verse);
-                      setShowColorPicker(false);
-                    }
-                  }}
-                  className={`px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${isSelected ? "bg-cream-dark/30 ring-1 ring-brown/10 shadow-sm" : "hover:bg-cream/30"}`}
-                  style={hStyle ? { backgroundColor: hStyle.bg, borderLeft: `4px solid ${hStyle.border}` } : { borderLeft: "4px solid transparent" }}
-                >
-                  <span className="text-muted/30 text-[10px] font-mono mr-3 select-none inline-block w-4">{v.verse}</span>
-                  <span className="text-dark text-[15px] leading-relaxed tracking-wide">{v.text}</span>
-                </div>
-
-                 {/* Verse action bar */}
-                {isSelected && (
-                  <div
-                    className="flex items-center gap-1.5 mt-2 ml-4 mb-3 relative z-40 pointer-events-auto"
-                    style={{ animation: "fadeIn 0.2s ease-out both" }}
-                  >
-                    {!communityMode && (
-                      <>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowColorPicker(!showColorPicker); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-muted hover:text-brown bg-ivory border border-brown/10 rounded-xl transition shadow-sm"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                          </svg>
-                          Highlight
-                        </button>
-
-                        <button
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            const ref = `${book} ${chapter}:${v.verse}`;
-                            const text = `${v.verse} ${v.text}`;
-                            router.push(`/journal?verse=${encodeURIComponent(ref)}&text=${encodeURIComponent(text)}&t=${translation}`);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-muted hover:text-brown bg-ivory border border-brown/10 rounded-xl transition shadow-sm"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                          </svg>
-                          Journal
-                        </button>
-
-                        <div className="flex flex-col items-start gap-0.5">
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              const ref = `${book} ${chapter}:${v.verse}`;
-                              const isSaved = memoryVerses.some(mv => mv.verse === ref);
-                              if (isSaved) {
-                                removeMemoryVerse(ref);
-                              } else {
-                                addMemoryVerse(ref, v.text);
-                              }
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold border rounded-xl transition shadow-sm ${memoryVerses.some(mv => mv.verse === `${book} ${chapter}:${v.verse}`) ? "bg-accent-gold/20 text-accent-gold border-accent-gold/40" : "text-muted hover:text-brown bg-ivory border-brown/10"}`}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill={memoryVerses.some(mv => mv.verse === `${book} ${chapter}:${v.verse}`) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                            </svg>
-                            {memoryVerses.some(mv => mv.verse === `${book} ${chapter}:${v.verse}`) ? "Added to Memory" : "Memorize"}
-                          </button>
-                          {memoryVerses.some(mv => mv.verse === `${book} ${chapter}:${v.verse}`) && (
-                            <a href="/me" className="text-[9px] text-accent-gold/60 underline hover:text-accent-gold ml-3 transition-all animate-in fade-in slide-in-from-top-1">
-                              View in Profile
-                            </a>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {communityMode && (
-                      <button
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setShowDiscussion(!showDiscussion); 
-                        }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold border rounded-xl transition shadow-sm active:scale-95 z-50 pointer-events-auto ${showDiscussion ? "bg-brown text-ivory border-brown" : "text-muted hover:text-brown bg-ivory border-brown/10"}`}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-7.6 8.38 8.38 0 0 1 3.8.9L21 3z" />
-                        </svg>
-                        {showDiscussion ? "Close Discussion" : "Discuss"}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Color picker */}
-                {isSelected && showColorPicker && (
-                  <div className="flex flex-col gap-3 ml-4 mb-3" style={{ animation: "fadeIn 0.2s ease-out both" }}>
-                    <div className="flex items-center gap-3">
-                      {HIGHLIGHT_COLORS.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={(e) => { e.stopPropagation(); handleHighlight(v.verse, c.id); }}
-                          className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-90 ${highlight?.color === c.id ? "ring-2 ring-brown/30 ring-offset-2" : ""}`}
-                          style={{ backgroundColor: c.bg, borderColor: c.border }}
-                          title={c.label}
-                        />
-                      ))}
-                      {highlight && (
-                        <button
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            removeBibleHighlight(book, chapter, v.verse); 
-                            setHighlights(getHighlightsForChapter(book, chapter)); 
-                            setShowColorPicker(false);
-                            setSelectedVerse(null);
-                          }}
-                          className="w-9 h-9 rounded-full border border-red-400/20 flex items-center justify-center text-red-400 hover:bg-red-400/10 transition"
-                          title="Remove Highlight"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Previews & Inline Discussion */}
-                <div className="ml-7 mr-3 mt-1 pb-2">
-                  {/* Top Reflection Preview */}
-                  {communityMode && !isSelected && commentPreviews[v.verse] && (
-                    <div 
-                      className="p-3 bg-brown/[0.03] border border-brown/5 rounded-xl animate-in fade-in slide-in-from-top-1 duration-300"
-                      onClick={(e) => { e.stopPropagation(); setSelectedVerse(v.verse); setShowDiscussion(true); }}
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-4 h-4 rounded-full bg-brown/10 flex items-center justify-center text-[8px] font-bold text-brown/40 overflow-hidden">
-                          {commentPreviews[v.verse].profile?.imageUrl ? (
-                            <img src={commentPreviews[v.verse].profile.imageUrl} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            commentPreviews[v.verse].profile?.displayName?.charAt(0) || "?"
-                          )}
-                        </div>
-                        <span className="text-[10px] font-bold text-brown/60 uppercase tracking-tight">Top Discussion Post</span>
-                      </div>
-                      <p className="text-xs text-muted line-clamp-2 leading-relaxed italic">"{commentPreviews[v.verse].content}"</p>
-                    </div>
-                  )}
-
-                  {/* Inline Discussion Area */}
-                  {isSelected && showDiscussion && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-400">
-                      <VerseDiscussionView 
-                        book={book} 
-                        chapter={chapter.toString()} 
-                        verse={v.verse.toString()} 
-                        verseText={v.text}
-                        onClose={() => setShowDiscussion(false)}
-                        onCommentPosted={(newComment) => {
-                          setCommentPreviews(prev => ({
-                            ...prev,
-                            [v.verse.toString()]: newComment
-                          }));
-                        }}
-                        onCommentDeleted={(id) => {
-                          setCommentPreviews(prev => {
-                            const p = { ...prev };
-                            if (p[v.verse.toString()]?.id === id) {
-                              delete p[v.verse.toString()];
-                            }
-                            return p;
-                          });
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      {!loading && !error && verses.length > 0 && !communityMode && (
+        <StudyReader key={book + chapter + translation} book={book} chapter={chapter} translation={translation} verses={verses} requestedHighlight={searchParams.get("h")} />
+      )}
+      {!loading && !error && verses.length > 0 && communityMode && (
+        <div className="mb-8">
+          {verses.map(v => <div key={v.verse} className="mb-3 rounded-xl border border-brown/10 p-3">
+            <button type="button" onClick={() => { setSelectedVerse(v.verse); setShowDiscussion(selectedVerse === v.verse ? !showDiscussion : true); }} aria-expanded={selectedVerse === v.verse && showDiscussion} className="w-full text-left text-dark text-base leading-relaxed">
+              <span className="mr-3 text-xs font-semibold text-muted">{v.verse}</span><span className="whitespace-pre-line">{v.text}</span>
+              <span className="mt-2 block text-xs font-medium text-brown">{selectedVerse === v.verse && showDiscussion ? "Close discussion" : "Discuss this verse"}</span>
+            </button>
+            {commentPreviews[v.verse] && selectedVerse !== v.verse && <p className="mt-2 border-l-2 border-accent-gold/30 pl-3 text-sm text-muted line-clamp-2">{commentPreviews[v.verse].content}</p>}
+            {selectedVerse === v.verse && showDiscussion && <VerseDiscussionView key={book + chapter + v.verse} book={book} chapter={String(chapter)} verse={String(v.verse)} verseText={v.text} onClose={() => setShowDiscussion(false)} onCommentPosted={comment => setCommentPreviews(prev => ({ ...prev, [v.verse]: comment }))} onCommentDeleted={id => setCommentPreviews(prev => { const next = { ...prev }; if (next[v.verse]?.id === id) delete next[v.verse]; return next; })} />}
+          </div>)}
         </div>
       )}
-
 
       {/* Chapter navigation footer */}
       {!loading && verses.length > 0 && (

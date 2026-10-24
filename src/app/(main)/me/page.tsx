@@ -35,7 +35,7 @@ export default function MePage() {
   const [isDark, setIsDark] = useState(false);
   const [search, setSearch] = useState("");
   const [bookFilter, setBookFilter] = useState("");
-  const [memoryVerses, setMemoryVerses] = useState<{ verse: string; text: string; addedAt: string }[]>([]);
+  const [memoryVerses, setMemoryVerses] = useState<{ verse: string; text: string; translation?: string | null; addedAt: string }[]>([]);
   const [bookFreq, setBookFreq] = useState<{ book: string; count: number }[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState({ observation: "", prayer: "", execution: "" });
@@ -263,7 +263,7 @@ export default function MePage() {
                   onClick={() => setActiveVerse(mv)}
                 >
                   <p className="text-dark text-sm font-medium group-hover:text-brown transition-colors flex items-center gap-2">
-                    {mv.verse}
+                    {mv.verse} <span className="text-xs text-muted">{mv.translation ? mv.translation.toUpperCase() : "Translation unknown"}</span>
                     <span className="text-[10px] text-accent-gold opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest font-bold">Practice &rarr;</span>
                   </p>
                   <p className="text-dark/70 text-xs italic mt-1 leading-relaxed line-clamp-2">&ldquo;{mv.text}&rdquo;</p>
@@ -417,7 +417,7 @@ export default function MePage() {
                 >
                   <div>
                     <p className="text-dark text-sm font-medium">
-                      {entry.revelationVerse}
+                      {entry.revelationVerse} <span className="text-xs text-muted">{entry.translation ? entry.translation.toUpperCase() : "Translation unknown"}</span>
                     </p>
                     <p className="text-muted text-xs">
                       {formatDate(entry.createdAt)}

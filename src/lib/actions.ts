@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { RopeEntry, PrayerItem, GratitudeItem, BibleHighlight, PlanProgress } from "./store";
 import { enforceRateLimit } from "./rate-limit";
 import { RopeEntrySchema, PrayerItemSchema, FeedbackSchema, ErrorLogSchema, BibleHighlightSchema, GratitudeItemSchema, MemoryVerseSchema, UserSettingsSchema } from "./validations";
+import { highlightId } from "./highlight-model";
 
 // ─── Entry Actions ───────────────────────────────────────────────────────────
 
@@ -198,29 +199,39 @@ export async function getDbHighlights() {
 
   return results.map(r => ({
     ...r,
+    id: r.id.slice(`${userId}_`.length),
     chapter: parseInt(r.chapter, 10),
     verse: parseInt(r.verse, 10),
     createdAt: r.createdAt.toISOString(),
   })) as BibleHighlight[];
 }
 
-export async function saveDbHighlight(h: BibleHighlight) {
+export async function saveDbHighlight(h: BibleHighlight, expectedUserId?: string) {
   const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId || (expectedUserId && userId !== expectedUserId)) throw new Error("Unauthorized");
 
   await enforceRateLimit("saveDbHighlight", "Standard");
   const validated = BibleHighlightSchema.parse(h);
 
   const toSave = {
     ...validated,
-    id: `${userId}_${validated.book}_${validated.chapter}_${validated.verse}`, // unique id for conflict
+    id: `${userId}_${highlightId(validated)}`,
     userId,
     chapter: validated.chapter.toString(),
     verse: validated.verse.toString(),
     createdAt: new Date(validated.createdAt),
   };
 
-  await db.insert(highlightsTable).values(toSave).onConflictDoUpdate({ target: highlightsTable.id, set: toSave });
+  await db.insert(highlightsTable).values(toSave).onConflictDoUpdate({ target: highlightsTable.id, set: toSave, setWhere: eq(highlightsTable.userId, userId) });
+  return true;
+}
+
+export async function deleteDbHighlightById(id: string, expectedUserId?: string) {
+  const { userId } = await auth();
+  if (!userId || (expectedUserId && userId !== expectedUserId)) throw new Error("Unauthorized");
+  BibleHighlightSchema.shape.id.unwrap().parse(id);
+  await enforceRateLimit("deleteDbHighlightById", "Standard");
+  await db.delete(highlightsTable).where(and(eq(highlightsTable.id, `${userId}_${id}`), eq(highlightsTable.userId, userId)));
   return true;
 }
 
@@ -245,13 +256,13 @@ export async function syncHighlights(local: BibleHighlight[]) {
     const validated = BibleHighlightSchema.parse(h);
     const toSave = {
       ...validated,
-      id: `${userId}_${validated.book}_${validated.chapter}_${validated.verse}`,
+      id: `${userId}_${highlightId(validated)}`,
       userId,
       chapter: validated.chapter.toString(),
       verse: validated.verse.toString(),
       createdAt: new Date(validated.createdAt),
     };
-    await db.insert(highlightsTable).values(toSave).onConflictDoUpdate({ target: highlightsTable.id, set: toSave });
+    await db.insert(highlightsTable).values(toSave).onConflictDoUpdate({ target: highlightsTable.id, set: toSave, setWhere: eq(highlightsTable.userId, userId) });
   }
   return true;
 }
@@ -335,10 +346,10 @@ export async function getDbMemoryVerses() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
   const results = await db.query.memoryVerses.findMany({ where: eq(memoryVerses.userId, userId) });
-  return results.map(r => ({ verse: r.verse, text: r.text, addedAt: r.addedAt.toISOString() }));
+  return results.map(r => ({ verse: r.verse, text: r.text, translation: r.translation, addedAt: r.addedAt.toISOString() }));
 }
 
-export async function saveDbMemoryVerse(mv: { verse: string; text: string; addedAt: string }) {
+export async function saveDbMemoryVerse(mv: { verse: string; text: string; translation?: string | null; addedAt: string }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -360,13 +371,14 @@ export async function deleteDbMemoryVerse(verse: string) {
   return true;
 }
 
-export async function syncMemoryVerses(local: { verse: string; text: string; addedAt: string }[]) {
+export async function syncMemoryVerses(local: { verse: string; text: string; translation?: string | null; addedAt: string }[]) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
   await enforceRateLimit("syncMemoryVerses", "Standard");
   for (const mv of local) {
-    const id = `${userId}_${mv.verse.replace(/\s+/g, "_")}`;
-    const toSave = { ...mv, id, userId, addedAt: new Date(mv.addedAt) };
+    const validated = MemoryVerseSchema.parse(mv);
+    const id = `${userId}_${validated.verse.replace(/\s+/g, "_")}`;
+    const toSave = { ...validated, id, userId, addedAt: new Date(validated.addedAt) };
     await db.insert(memoryVerses).values(toSave).onConflictDoUpdate({ target: memoryVerses.id, set: toSave });
   }
   return true;

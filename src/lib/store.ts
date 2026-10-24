@@ -8,6 +8,7 @@ export interface RopeEntry {
   createdAt: string;
   revelationVerse: string;
   revelationText: string;
+  translation?: string | null;
   observation: string;
   prayer: string;
   execution: string;
@@ -17,74 +18,8 @@ export interface RopeEntry {
 
 // ─── Bible Books ─────────────────────────────────────────────────────────────
 
-export const BIBLE_BOOKS = [
-  { name: "Genesis", abbrevs: ["gen", "ge", "gn"] },
-  { name: "Exodus", abbrevs: ["exod", "exo", "ex"] },
-  { name: "Leviticus", abbrevs: ["lev", "le", "lv"] },
-  { name: "Numbers", abbrevs: ["num", "nu", "nm"] },
-  { name: "Deuteronomy", abbrevs: ["deut", "de", "dt"] },
-  { name: "Joshua", abbrevs: ["josh", "jos", "jsh"] },
-  { name: "Judges", abbrevs: ["judg", "jdg", "jg"] },
-  { name: "Ruth", abbrevs: ["ruth", "ru", "rth"] },
-  { name: "1 Samuel", abbrevs: ["1sam", "1sa", "1 sam"] },
-  { name: "2 Samuel", abbrevs: ["2sam", "2sa", "2 sam"] },
-  { name: "1 Kings", abbrevs: ["1kgs", "1ki", "1 kings"] },
-  { name: "2 Kings", abbrevs: ["2kgs", "2ki", "2 kings"] },
-  { name: "1 Chronicles", abbrevs: ["1chr", "1ch", "1 chron"] },
-  { name: "2 Chronicles", abbrevs: ["2chr", "2ch", "2 chron"] },
-  { name: "Ezra", abbrevs: ["ezra", "ezr"] },
-  { name: "Nehemiah", abbrevs: ["neh", "ne"] },
-  { name: "Esther", abbrevs: ["esth", "est", "es"] },
-  { name: "Job", abbrevs: ["job", "jb"] },
-  { name: "Psalms", abbrevs: ["ps", "psa", "psalm"] },
-  { name: "Proverbs", abbrevs: ["prov", "pro", "pr"] },
-  { name: "Ecclesiastes", abbrevs: ["eccl", "ecc", "ec"] },
-  { name: "Song of Solomon", abbrevs: ["song", "sos", "sg"] },
-  { name: "Isaiah", abbrevs: ["isa", "is"] },
-  { name: "Jeremiah", abbrevs: ["jer", "je"] },
-  { name: "Lamentations", abbrevs: ["lam", "la"] },
-  { name: "Ezekiel", abbrevs: ["ezek", "eze", "ezk"] },
-  { name: "Daniel", abbrevs: ["dan", "da", "dn"] },
-  { name: "Hosea", abbrevs: ["hos", "ho"] },
-  { name: "Joel", abbrevs: ["joel", "jl"] },
-  { name: "Amos", abbrevs: ["amos", "am"] },
-  { name: "Obadiah", abbrevs: ["obad", "ob"] },
-  { name: "Jonah", abbrevs: ["jonah", "jon"] },
-  { name: "Micah", abbrevs: ["mic", "mc"] },
-  { name: "Nahum", abbrevs: ["nah", "na"] },
-  { name: "Habakkuk", abbrevs: ["hab"] },
-  { name: "Zephaniah", abbrevs: ["zeph", "zep"] },
-  { name: "Haggai", abbrevs: ["hag", "hg"] },
-  { name: "Zechariah", abbrevs: ["zech", "zec"] },
-  { name: "Malachi", abbrevs: ["mal", "ml"] },
-  { name: "Matthew", abbrevs: ["matt", "mat", "mt"] },
-  { name: "Mark", abbrevs: ["mark", "mrk", "mk"] },
-  { name: "Luke", abbrevs: ["luke", "luk", "lk"] },
-  { name: "John", abbrevs: ["john", "jhn", "jn"] },
-  { name: "Acts", abbrevs: ["acts", "act", "ac"] },
-  { name: "Romans", abbrevs: ["rom", "ro", "rm"] },
-  { name: "1 Corinthians", abbrevs: ["1cor", "1co", "1 cor"] },
-  { name: "2 Corinthians", abbrevs: ["2cor", "2co", "2 cor"] },
-  { name: "Galatians", abbrevs: ["gal", "ga"] },
-  { name: "Ephesians", abbrevs: ["eph", "ep"] },
-  { name: "Philippians", abbrevs: ["phil", "php"] },
-  { name: "Colossians", abbrevs: ["col", "co"] },
-  { name: "1 Thessalonians", abbrevs: ["1thess", "1th", "1 thes"] },
-  { name: "2 Thessalonians", abbrevs: ["2thess", "2th", "2 thes"] },
-  { name: "1 Timothy", abbrevs: ["1tim", "1ti", "1 tim"] },
-  { name: "2 Timothy", abbrevs: ["2tim", "2ti", "2 tim"] },
-  { name: "Titus", abbrevs: ["titus", "tit"] },
-  { name: "Philemon", abbrevs: ["phlm", "phm"] },
-  { name: "Hebrews", abbrevs: ["heb"] },
-  { name: "James", abbrevs: ["jas", "jm"] },
-  { name: "1 Peter", abbrevs: ["1pet", "1pe", "1 pet"] },
-  { name: "2 Peter", abbrevs: ["2pet", "2pe", "2 pet"] },
-  { name: "1 John", abbrevs: ["1john", "1jn", "1 john"] },
-  { name: "2 John", abbrevs: ["2john", "2jn", "2 john"] },
-  { name: "3 John", abbrevs: ["3john", "3jn", "3 john"] },
-  { name: "Jude", abbrevs: ["jude", "jud"] },
-  { name: "Revelation", abbrevs: ["rev", "re"] },
-];
+import { BIBLE_BOOKS, BOOK_CHAPTERS } from "./bible-data";
+export { BIBLE_BOOKS, BOOK_CHAPTERS } from "./bible-data";
 
 export function suggestBooks(input: string): string[] {
   if (!input.trim()) return [];
@@ -139,7 +74,7 @@ import { migrateFromLocalStorage, loadRopeEntries, saveRopeEntries, deleteRopeEn
 import { 
   getDbEntries, saveDbEntry, deleteDbEntry, syncEntries,
   getDbPrayers, saveDbPrayer, deleteDbPrayer, syncPrayers,
-  getDbHighlights, saveDbHighlight, deleteDbHighlight, syncHighlights,
+  getDbHighlights, saveDbHighlight, deleteDbHighlightById, syncHighlights,
   getDbGratitude, saveDbGratitude, deleteDbGratitude, syncGratitude,
   getDbPlanProgress, saveDbPlanProgress,
   getDbMemoryVerses, saveDbMemoryVerse, deleteDbMemoryVerse, syncMemoryVerses,
@@ -148,24 +83,37 @@ import {
 
 let cachedEntries: RopeEntry[] | null = null;
 let cachedPrayers: PrayerItem[] | null = null;
-let cachedHighlights: BibleHighlight[] | null = null;
+import { HighlightRepository } from "./highlight-repository";
+import { highlightId, type BibleHighlight } from "./highlight-model";
+export type { BibleHighlight } from "./highlight-model";
+let highlightRepository: HighlightRepository | null = null;
+let highlightAccount = "local";
+let highlightsAuthenticated = false;
 let cachedGratitude: GratitudeItem[] | null = null;
 let cachedPlan: PlanProgress | null = null;
-let cachedMemoryVerses: { verse: string; text: string; addedAt: string }[] | null = null;
+let cachedMemoryVerses: { verse: string; text: string; translation?: string | null; addedAt: string }[] | null = null;
 let cachedSettings: { darkMode: boolean; translation: string; onboardingComplete: boolean; lastRead: any[] } | null = null;
 let storeInitialized = false;
+let storeGeneration = 0;
 
 /**
  * Initializes the store by loading entries from Postgres (if logged in) or IndexedDB.
  * Falls back to localStorage if IndexedDB is empty/unavailable.
  */
-export async function initializeStore(isAuthenticated: boolean = false) {
-  if (typeof window === "undefined" || storeInitialized) return;
+export async function initializeStore(isAuthenticated: boolean = false, accountId = "local") {
+  if (typeof window === "undefined") return;
+  if (highlightAccount !== accountId || highlightsAuthenticated !== isAuthenticated) clearCache();
+  highlightAccount = accountId;
+  highlightsAuthenticated = isAuthenticated;
+  if (storeInitialized) return;
+  const repository = getHighlightRepository();
+  const generation = storeGeneration;
   
   try {
     if (!localStorage.getItem("rope_entries_migrated")) {
       await migrateFromLocalStorage();
     }
+    if (generation !== storeGeneration) return;
     
     if (isAuthenticated) {
       // 1. Initial Sync if needed
@@ -184,6 +132,7 @@ export async function initializeStore(isAuthenticated: boolean = false) {
           syncHighlights(localHighlights),
           syncMemoryVerses(localMemoryVerses)
         ]);
+        if (generation !== storeGeneration) return;
         localStorage.setItem("rope_full_db_synced", "true");
       }
 
@@ -197,11 +146,13 @@ export async function initializeStore(isAuthenticated: boolean = false) {
         getDbMemoryVerses(),
         getDbSettings()
       ]);
+      if (generation !== storeGeneration) return;
 
       cachedEntries = entries;
       cachedPrayers = prayers;
       cachedGratitude = gratitude;
-      cachedHighlights = highlights;
+      repository.hydrateCloud(highlights);
+      void repository.flush();
       cachedPlan = plan;
       cachedMemoryVerses = mvs;
       cachedSettings = settings || {
@@ -221,10 +172,12 @@ export async function initializeStore(isAuthenticated: boolean = false) {
         else document.documentElement.classList.remove('dark');
       }
     } else {
-      cachedEntries = await loadRopeEntries();
+      const entries = await loadRopeEntries();
+      if (generation !== storeGeneration) return;
+      cachedEntries = entries;
       cachedPrayers = JSON.parse(localStorage.getItem("rope_prayers") || "[]");
       cachedGratitude = JSON.parse(localStorage.getItem("rope_gratitude") || "[]");
-      cachedHighlights = JSON.parse(localStorage.getItem("rope_bible_highlights") || "[]");
+      getBibleHighlights();
       cachedPlan = JSON.parse(localStorage.getItem("rope_active_plan") || "null");
       cachedMemoryVerses = JSON.parse(localStorage.getItem("rope_memory_verses") || "[]");
       cachedSettings = {
@@ -268,9 +221,10 @@ export function getRopeEntries(userId?: string): RopeEntry[] {
 }
 
 export function clearCache(): void {
+  storeGeneration++;
   cachedEntries = null;
   cachedPrayers = null;
-  cachedHighlights = null;
+  highlightRepository = null;
   cachedGratitude = null;
   cachedPlan = null;
   cachedMemoryVerses = null;
@@ -531,151 +485,12 @@ export function getUniqueBooksCount(userId: string): number {
 
 // ─── Bible Translations ─────────────────────────────────────────────────────
 
-// bible-api.com translations (free, no API key)
-const BIBLE_API_TRANSLATIONS = new Set(["kjv", "web", "bbe"]);
-
-const TRANSLATIONS = [
-  { id: "kjv", label: "KJV", gateway: "KJV" },
-  { id: "niv", label: "NIV", gateway: "NIV" },
-  { id: "esv", label: "ESV", gateway: "ESV" },
-  { id: "nlt", label: "NLT", gateway: "NLT" },
-  { id: "nasb", label: "NASB", gateway: "NASB" },
-  { id: "nkjv", label: "NKJV", gateway: "NKJV" },
-  { id: "amp", label: "AMP", gateway: "AMP" },
-  { id: "msg", label: "MSG", gateway: "MSG" },
-  { id: "web", label: "WEB", gateway: "WEB" },
-  { id: "bbe", label: "BBE", gateway: "BBE" },
-];
-
-// bolls.life translation ID mapping (their API uses numeric IDs)
-const BOLLS_TRANSLATION_MAP: Record<string, string> = {
-  kjv: "KJV",
-  niv: "NIV",
-  esv: "ESV",
-  nlt: "NLT",
-  nasb: "NASB",
-  nkjv: "NKJV",
-  amp: "AMP",
-  msg: "MSG",
-  web: "WEB",
-  bbe: "BBE",
-};
-
-/**
- * Parse a verse reference into book + chapter + verse(s) for the bolls.life API.
- * Supports: "John 3:16", "John 3:16-18", "John 3:16,18", "John 3"
- * Returns { bookNum, chapter, verses: number[] } or null.
- */
-export function parseVerseRef(ref: string): { bookNum: number; chapter: number; verses: number[] } | null {
-  const trimmed = ref.trim();
-  if (trimmed.length > 2000) return null;
-  // Match: "Book Chapter:VerseStuff" or "Book Chapter VerseStuff" (space/colon/comma)
-  const match = trimmed.match(/^(.+?)\s+(\d+)(?:[ :]+(.+))?$/);
-  if (!match) return null;
-
-  const bookName = match[1].trim().toLowerCase();
-  const chapter = parseInt(match[2]);
-  const verseStuff = match[3] ? match[3].trim() : "";
-
-  // Map book name to bolls.life book number (1-66)
-  const bookIndex = BIBLE_BOOKS.findIndex(b => {
-    const nameLower = b.name.toLowerCase();
-    return nameLower === bookName || b.abbrevs.some(a => a === bookName);
-  });
-
-  if (bookIndex === -1 || chapter < 1 || chapter > BOOK_CHAPTERS[BIBLE_BOOKS[bookIndex].name]) return null;
-
-  const verses: number[] = [];
-  if (verseStuff) {
-    // Parse complex ranges like "1-3,5,7-9"
-    const parts = verseStuff.split(",");
-    for (const part of parts) {
-      const range = part.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
-      if (!range) return null;
-      const start = Number(range[1]);
-      const end = range[2] ? Number(range[2]) : start;
-      // Psalm 119 contains the most verses in a chapter (176).
-      if (start < 1 || end < start || end > 176) return null;
-      for (let i = start; i <= end; i++) verses.push(i);
-    }
-  }
-
-  return { bookNum: bookIndex + 1, chapter, verses: [...new Set(verses)].sort((a, b) => a - b) };
-}
-
-/**
- * Fetch a verse from the appropriate API based on translation.
- * Uses bible-api.com for KJV/WEB/BBE, bolls.life for all others.
- */
-export async function fetchVerse(verseRef: string, translationId: string): Promise<string> {
-  try {
-    if (BIBLE_API_TRANSLATIONS.has(translationId)) {
-      // Use bible-api.com
-      const res = await fetch(`https://bible-api.com/${encodeURIComponent(verseRef)}?translation=${translationId}`);
-      if (!res.ok) throw new Error(`Reference "${verseRef}" not found in ${translationId.toUpperCase()}.`);
-      const data = await res.json();
-      if (data.text) return data.text.trim();
-      throw new Error("No text found for this reference.");
-    }
-
-  // Use bolls.life for NIV, ESV, NLT, NASB, NKJV, AMP, MSG
-  const bollsId = BOLLS_TRANSLATION_MAP[translationId];
-  if (!bollsId) throw new Error(`Translation ${translationId} not supported`);
-
-  const parsed = parseVerseRef(verseRef);
-  if (!parsed) throw new Error("Could not parse verse reference");
-
-  const { bookNum, chapter, verses } = parsed;
-
-  if (verses.length > 0) {
-    // Fetch specific verse(s)
-    const promises = verses.map(v => 
-      fetch(`https://bolls.life/get-verse/${bollsId}/${bookNum}/${chapter}/${v}/`)
-        .then(async r => {
-          if (!r.ok) return { verse: v, text: "" };
-          const d = await r.json();
-          // Clean text and handle clumping
-          let clean = (d.text || "").replace(/<[^>]*>/g, "").trim();
-          // Fix [a-z][A-Z] clumping (section headers)
-          clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
-          return { verse: v, text: clean };
-        })
-    );
-    
-    const results = await Promise.all(promises);
-    const combined = results
-      .filter(r => r.text)
-      .sort((a, b) => a.verse - b.verse)
-      .map(r => r.text)
-      .join(" ");
-      
-    if (!combined) throw new Error("No text returned for these verses");
-    return combined;
-  }
-
-  // Whole chapter — fetch chapter text
-  const url = `https://bolls.life/get-chapter/${bollsId}/${bookNum}/${chapter}/`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Chapter not found");
-  const data = await res.json();
-  if (Array.isArray(data)) {
-    const combined = data.map((v: { text: string }) => (v.text || "").replace(/<[^>]*>/g, "").trim()).join(" ");
-    if (!combined) throw new Error("No text returned");
-    return combined;
-  }
-    throw new Error("Unexpected response format from Bible API.");
-  } catch (err: any) {
-    if (err instanceof Error && err.message.includes("Failed to fetch")) {
-      throw new Error("Connection failed. Please check your internet.");
-    }
-    throw err;
-  }
-}
+import { TRANSLATIONS } from "./scripture";
+export { TRANSLATIONS, fetchVerse, fetchChapterVerses, parseVerseRef } from "./scripture";
 
 export function getTranslation(): string {
   if (typeof window === "undefined") return "kjv";
-  if (storeInitialized && cachedSettings) return cachedSettings.translation;
-  const saved = localStorage.getItem("rope_translation") || "kjv";
+  const saved = (storeInitialized && cachedSettings ? cachedSettings.translation : localStorage.getItem("rope_translation")) || "kjv";
   if (!TRANSLATIONS.some(t => t.id === saved)) return "kjv";
   return saved;
 }
@@ -686,82 +501,10 @@ export function getGatewayVersion(translationId: string): string {
 }
 
 export function setTranslation(t: string): void {
+  if (!TRANSLATIONS.some(translation => translation.id === t)) return;
   if (storeInitialized && cachedSettings) cachedSettings.translation = t;
   localStorage.setItem("rope_translation", t);
   saveSettings();
-}
-
-export { TRANSLATIONS };
-
-/**
- * Fetch a full chapter as individual verses.
- * Uses bible-api.com for KJV/WEB/BBE, bolls.life for all others.
- */
-export async function fetchChapterVerses(bookName: string, chapter: number, translationId: string): Promise<{ verse: number; text: string }[]> {
-  if (BIBLE_API_TRANSLATIONS.has(translationId)) {
-    // Use bible-api.com for chapter fetch
-    const res = await fetch(`https://bible-api.com/${encodeURIComponent(bookName + ' ' + chapter)}?translation=${translationId}`);
-    if (!res.ok) throw new Error("Chapter not found");
-    const data = await res.json();
-    if (!data.verses || !Array.isArray(data.verses)) throw new Error("Unexpected response");
-    
-    return data.verses.map((v: { verse: number; text: string }) => ({
-      verse: v.verse,
-      text: (v.text || "").replace(/([a-z])([A-Z])/g, '$1 $2').trim(),
-    }));
-  }
-
-  // Use bolls.life translation name
-  const BOLLS_NAMES: Record<string, string> = {
-    kjv: "KJV", niv: "NIV", esv: "ESV", nlt: "NLT", nasb: "NASB",
-    nkjv: "NKJV", amp: "AMP", msg: "MSG", web: "WEB", bbe: "BBE",
-  };
-  const bollsName = BOLLS_NAMES[translationId] || "KJV";
-
-  const bookIndex = BIBLE_BOOKS.findIndex(b => b.name.toLowerCase() === bookName.toLowerCase());
-  if (bookIndex === -1) throw new Error(`Book not found: ${bookName}`);
-  const bookNum = bookIndex + 1;
-
-  const url = `https://bolls.life/get-text/${bollsName}/${bookNum}/${chapter}/`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Chapter not found");
-  const data = await res.json();
-
-  if (!Array.isArray(data)) throw new Error("Unexpected response");
-
-  // Advanced cleaning for bolls.life metadata/headers
-  // often returns headers like "Psalm 43" or "BOOK I" in the first verse
-  return data.map((v: { verse: number; text: string }) => {
-    let cleanText = (v.text || "")
-      .replace(/<S>\d+<\/S>/g, "")
-      .replace(/<[^>]*>/g, "")
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .trim();
-
-    if (v.verse === 1) {
-      // Remove leading Psalm/Book headers if they clump into verse 1
-      // e.g. "Psalm 43Vindicate me" -> "Vindicate me"
-      const psalmMatch = cleanText.match(new RegExp(`^Psalm\\s*\\d+\\s*`, 'i'));
-      if (psalmMatch) cleanText = cleanText.substring(psalmMatch[0].length).trim();
-      
-      const bookMatch = cleanText.match(/^BOOK\s+[IVXLCDM]+\s*/i);
-      if (bookMatch) cleanText = cleanText.substring(bookMatch[0].length).trim();
-
-      // Remove specific clumping like "Psalms 1–41Psalm 1"
-      const multiMatch = cleanText.match(/^[A-Za-z]+\s+\d+[-–]\d+[A-Za-z]+\s+\d+/i);
-      if (multiMatch) cleanText = cleanText.substring(multiMatch[0].length).trim();
-
-      // Remove Hebrew letter headers for Psalm 119
-      if (bookName.toLowerCase() === 'psalms' && chapter === 119) {
-        cleanText = cleanText.replace(/^[א-ת]\s+\w+\s+/i, "").trim();
-      }
-    }
-
-    return {
-      verse: v.verse,
-      text: cleanText,
-    };
-  }).filter((v: { text: string }) => v.text.length > 0);
 }
 
 // ─── Bible History ──────────────────────────────────────────────────────────
@@ -1184,7 +927,7 @@ export function deleteGratitudeItem(id: string): void {
 
 // ─── Memory Verses ──────────────────────────────────────────────────────────
 
-export function getMemoryVerses(): { verse: string; text: string; addedAt: string }[] {
+export function getMemoryVerses(): { verse: string; text: string; translation?: string | null; addedAt: string }[] {
   if (typeof window === "undefined") return [];
   if (storeInitialized && cachedMemoryVerses) return cachedMemoryVerses;
   const raw = localStorage.getItem("rope_memory_verses");
@@ -1192,8 +935,8 @@ export function getMemoryVerses(): { verse: string; text: string; addedAt: strin
   try { return JSON.parse(raw); } catch { return []; }
 }
 
-export async function addMemoryVerse(verse: string, text: string): Promise<void> {
-  const item = { verse, text, addedAt: new Date().toISOString() };
+export async function addMemoryVerse(verse: string, text: string, translation?: string | null): Promise<void> {
+  const item = { verse, text, translation: translation || null, addedAt: new Date().toISOString() };
   const previousVerses = getMemoryVerses();
   
   if (previousVerses.some(v => v.verse === verse)) return;
@@ -1266,62 +1009,42 @@ export async function removeMemoryVerse(verse: string): Promise<void> {
 
 // ─── Bible Highlights ───────────────────────────────────────────────────────
 
-export interface BibleHighlight {
-  book: string;      // e.g. "John"
-  chapter: number;
-  verse: number;
-  color: string;     // "gold" | "green" | "blue" | "red"
-  note: string;
-  createdAt: string;
+function getHighlightRepository(): HighlightRepository {
+  if (!highlightRepository) {
+    const account = highlightAccount;
+    highlightRepository = new HighlightRepository(localStorage, account, highlightsAuthenticated ? {
+      save: h => saveDbHighlight(h, account),
+      remove: id => deleteDbHighlightById(id, account),
+    } : undefined, () => window.dispatchEvent(new CustomEvent("rope-highlights-update")));
+  }
+  return highlightRepository;
 }
 
 export function getBibleHighlights(): BibleHighlight[] {
-  if (typeof window === "undefined") return [];
-  if (storeInitialized && cachedHighlights) return cachedHighlights;
-  const raw = localStorage.getItem("rope_bible_highlights");
-  if (!raw) return [];
-  try { return JSON.parse(raw) as BibleHighlight[]; } catch { return []; }
+  return typeof window === "undefined" ? [] : getHighlightRepository().get();
 }
+export function getHighlightSyncStatus(): { pending: number; cloud: boolean } {
+  return { pending: getHighlightRepository().pendingCount, cloud: highlightsAuthenticated };
+}
+export function retryHighlightSync(): Promise<boolean> { return getHighlightRepository().flush(); }
+export function saveBibleHighlight(value: BibleHighlight): Promise<boolean> { return getHighlightRepository().save(value); }
+export function deleteBibleHighlight(id: string): Promise<boolean> { return getHighlightRepository().remove(id); }
 
+/** Compatibility for original whole-verse marks; recoloring preserves the note and creation date. */
 export function addBibleHighlight(book: string, chapter: number, verse: number, color: string, note?: string): void {
-  const highlights = getBibleHighlights();
-  const highlight: BibleHighlight = { book, chapter, verse, color, note: note || "", createdAt: new Date().toISOString() };
-  // Remove existing highlight for same verse
-  const filtered = highlights.filter(h => !(h.book === book && h.chapter === chapter && h.verse === verse));
-  filtered.push(highlight);
-  if (storeInitialized && cachedHighlights) cachedHighlights = filtered;
-  localStorage.setItem("rope_bible_highlights", JSON.stringify(filtered));
-  saveDbHighlight(highlight).catch(console.error);
+  const id = highlightId({ book, chapter, verse });
+  const existing = getBibleHighlights().find(h => highlightId(h) === id);
+  void saveBibleHighlight({ ...existing, id, book, chapter, verse, color, note: note ?? existing?.note ?? "", createdAt: existing?.createdAt || new Date().toISOString() });
 }
-
 export function removeBibleHighlight(book: string, chapter: number, verse: number): void {
-  const highlights = getBibleHighlights().filter(h => !(h.book === book && h.chapter === chapter && h.verse === verse));
-  if (storeInitialized && cachedHighlights) cachedHighlights = highlights;
-  localStorage.setItem("rope_bible_highlights", JSON.stringify(highlights));
-  deleteDbHighlight(book, chapter, verse).catch(console.error);
+  void deleteBibleHighlight(highlightId({ book, chapter, verse }));
 }
-
 export function getHighlightsForChapter(book: string, chapter: number): BibleHighlight[] {
   return getBibleHighlights().filter(h => h.book === book && h.chapter === chapter);
 }
 
 // Chapter count per book (for navigation)
-export const BOOK_CHAPTERS: Record<string, number> = {
-  Genesis: 50, Exodus: 40, Leviticus: 27, Numbers: 36, Deuteronomy: 34,
-  Joshua: 24, Judges: 21, Ruth: 4, "1 Samuel": 31, "2 Samuel": 24,
-  "1 Kings": 22, "2 Kings": 25, "1 Chronicles": 29, "2 Chronicles": 36,
-  Ezra: 10, Nehemiah: 13, Esther: 10, Job: 42, Psalms: 150, Proverbs: 31,
-  Ecclesiastes: 12, "Song of Solomon": 8, Isaiah: 66, Jeremiah: 52,
-  Lamentations: 5, Ezekiel: 48, Daniel: 12, Hosea: 14, Joel: 3, Amos: 9,
-  Obadiah: 1, Jonah: 4, Micah: 7, Nahum: 3, Habakkuk: 3, Zephaniah: 3,
-  Haggai: 2, Zechariah: 14, Malachi: 4,
-  Matthew: 28, Mark: 16, Luke: 24, John: 21, Acts: 28, Romans: 16,
-  "1 Corinthians": 16, "2 Corinthians": 13, Galatians: 6, Ephesians: 6,
-  Philippians: 4, Colossians: 4, "1 Thessalonians": 5, "2 Thessalonians": 3,
-  "1 Timothy": 6, "2 Timothy": 4, Titus: 3, Philemon: 1, Hebrews: 13,
-  James: 5, "1 Peter": 5, "2 Peter": 3, "1 John": 5, "2 John": 1,
-  "3 John": 1, Jude: 1, Revelation: 22,
-};
+
 
 // ─── Verse Recommendations ──────────────────────────────────────────────────
 
@@ -1433,8 +1156,8 @@ export async function importData(jsonString: string, userId = "local", isAuthent
       }));
       data.rope_gratitude = mergeBackupItems(current, imported, item => item.id);
     }
-    if (data.rope_bible_highlights) data.rope_bible_highlights = mergeBackupItems(getBibleHighlights(), data.rope_bible_highlights as BibleHighlight[], h => `${h.book}:${h.chapter}:${h.verse}`);
-    if (data.rope_memory_verses) data.rope_memory_verses = mergeBackupItems(getMemoryVerses(), data.rope_memory_verses as { verse: string; text: string; addedAt: string }[], v => v.verse);
+    if (data.rope_bible_highlights) data.rope_bible_highlights = mergeBackupItems(getBibleHighlights(), data.rope_bible_highlights as BibleHighlight[], highlightId);
+    if (data.rope_memory_verses) data.rope_memory_verses = mergeBackupItems(getMemoryVerses(), data.rope_memory_verses as { verse: string; text: string; translation?: string | null; addedAt: string }[], v => v.verse);
     if (data.rope_plan_history) data.rope_plan_history = mergeBackupItems(getPlanHistory(), data.rope_plan_history as PlanProgress[], p => `${p.planId}:${p.startedAt}`);
 
     // Save a recoverable local copy before attempting the network.
@@ -1457,8 +1180,8 @@ export async function importData(jsonString: string, userId = "local", isAuthent
     }
     if (data.rope_prayers) cachedPrayers = data.rope_prayers as PrayerItem[];
     if (data.rope_gratitude) cachedGratitude = data.rope_gratitude as GratitudeItem[];
-    if (data.rope_bible_highlights) cachedHighlights = data.rope_bible_highlights as BibleHighlight[];
-    if (data.rope_memory_verses) cachedMemoryVerses = data.rope_memory_verses as { verse: string; text: string; addedAt: string }[];
+    if (data.rope_bible_highlights) getHighlightRepository().importLocal(data.rope_bible_highlights as BibleHighlight[]);
+    if (data.rope_memory_verses) cachedMemoryVerses = data.rope_memory_verses as { verse: string; text: string; translation?: string | null; addedAt: string }[];
     cachedSettings = {
       darkMode: data.rope_dark_mode as boolean ?? getDarkMode(),
       translation: data.rope_translation as string ?? getTranslation(),
@@ -1471,8 +1194,8 @@ export async function importData(jsonString: string, userId = "local", isAuthent
         ...(data.rope_entries ? [syncEntries(data.rope_entries as RopeEntry[])] : []),
         ...(data.rope_prayers ? [syncPrayers(data.rope_prayers as PrayerItem[])] : []),
         ...(data.rope_gratitude ? [syncGratitude(data.rope_gratitude as GratitudeItem[])] : []),
-        ...(data.rope_bible_highlights ? [syncHighlights(data.rope_bible_highlights as BibleHighlight[])] : []),
-        ...(data.rope_memory_verses ? [syncMemoryVerses(data.rope_memory_verses as { verse: string; text: string; addedAt: string }[])] : []),
+        ...(data.rope_bible_highlights ? [retryHighlightSync().then(ok => { if (!ok) throw new Error("Highlights are saved locally and waiting to sync."); })] : []),
+        ...(data.rope_memory_verses ? [syncMemoryVerses(data.rope_memory_verses as { verse: string; text: string; translation?: string | null; addedAt: string }[])] : []),
         ...(data.rope_active_plan ? [saveDbPlanProgress(data.rope_active_plan as PlanProgress)] : []),
         saveDbSettings(cachedSettings),
       ]);
@@ -1526,5 +1249,7 @@ export async function clearAllData(cloud: boolean = false): Promise<void> {
     await deleteRopeEntries();
   } catch (e) { /* ignore */ }
   
+  localStorage.removeItem(`rope_highlights_${highlightAccount}`);
+  localStorage.removeItem(`rope_highlight_outbox_${highlightAccount}`);
   clearCache();
 }

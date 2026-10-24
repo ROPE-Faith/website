@@ -52,7 +52,7 @@ export default function HistoryPage() {
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="font-serif text-lg text-brown font-bold tracking-tight">{entry.revelationVerse}</h3>
+                  <h3 className="font-serif text-lg text-brown font-bold tracking-tight">{entry.revelationVerse} <span className="font-sans text-xs font-normal text-muted">{entry.translation ? entry.translation.toUpperCase() : "Translation unknown"}</span></h3>
                   <p className="text-[10px] text-muted/60 uppercase tracking-widest font-semibold mt-0.5">
                     {new Date(entry.createdAt).toLocaleDateString("en-US", { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                   </p>

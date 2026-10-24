@@ -31,6 +31,15 @@ test("clearing every field removes the draft", () => {
   assert.equal(storage.getItem(draftKey("reader")), null);
 });
 
+test("drafts retain the quoted translation without treating a preference as written content", () => {
+  const { load, storage } = createLoader();
+  const { readJournalDraft, writeJournalDraft, EMPTY_DRAFT, draftKey } = load("src/lib/journal-draft.ts");
+  writeJournalDraft(storage, "reader", { ...EMPTY_DRAFT, verseRef: "John 3:16", verseText: "Selected text", translation: "esv" });
+  assert.equal(readJournalDraft(storage, "reader").translation, "esv");
+  writeJournalDraft(storage, "reader", { ...EMPTY_DRAFT, translation: "esv" });
+  assert.equal(storage.getItem(draftKey("reader")), null);
+});
+
 test("check-in lookup and streak count entries for the actual account", () => {
   const { store, storage } = createStore();
   const yesterday = new Date();

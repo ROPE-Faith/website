@@ -1,13 +1,14 @@
 export interface JournalDraft {
   verseRef: string;
   verseText: string;
+  translation: string;
   observation: string;
   prayer: string;
   execution: string;
 }
 
 export const EMPTY_DRAFT: JournalDraft = {
-  verseRef: "", verseText: "", observation: "", prayer: "", execution: "",
+  verseRef: "", verseText: "", translation: "", observation: "", prayer: "", execution: "",
 };
 
 export function draftKey(userId: string): string {
@@ -15,7 +16,7 @@ export function draftKey(userId: string): string {
 }
 
 export function hasDraftContent(draft: JournalDraft): boolean {
-  return Object.values(draft).some(value => value.trim().length > 0);
+  return Object.entries(draft).some(([key, value]) => key !== "translation" && value.trim().length > 0);
 }
 
 /** Keep unfinished writing across midnight and scope new drafts to the account. */

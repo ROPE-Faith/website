@@ -15,6 +15,13 @@
       "when": 1775059531227,
       "tag": "0001_add_error_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792808927553,
+      "tag": "0002_scripture_annotations",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, varchar, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, varchar, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
+import type { HighlightSelection } from "./highlight-model";
 
 export const executionStatusEnum = pgEnum("execution_status", ["yes", "partly", "not_yet"]);
 
@@ -8,6 +9,7 @@ export const entries = pgTable("entries", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   revelationVerse: text("revelation_verse").notNull(),
   revelationText: text("revelation_text").default("").notNull(),
+  translation: varchar("translation", { length: 16 }),
   observation: text("observation").default("").notNull(),
   prayer: text("prayer").default("").notNull(),
   execution: text("execution").default("").notNull(),
@@ -87,6 +89,7 @@ export const highlights = pgTable("highlights", {
   verse: text("verse").notNull(),
   color: varchar("color", { length: 50 }).notNull(),
   note: text("note").default("").notNull(),
+  selection: jsonb("selection").$type<HighlightSelection>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -104,6 +107,7 @@ export const memoryVerses = pgTable("memory_verses", {
   userId: varchar("user_id", { length: 255 }).notNull(),
   verse: text("verse").notNull(),
   text: text("text").notNull(),
+  translation: varchar("translation", { length: 16 }),
   addedAt: timestamp("added_at").defaultNow().notNull(),
 });
 

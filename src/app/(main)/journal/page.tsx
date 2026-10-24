@@ -333,6 +333,7 @@ export default function JournalPage() {
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [translation, setTranslationState] = useState("kjv");
+  const [verseTranslation, setVerseTranslation] = useState("");
 
   // AI suggestion state
   const [prayerSuggestion, setPrayerSuggestion] = useState<string | null>(null);
@@ -386,7 +387,7 @@ export default function JournalPage() {
 
   // ─── Draft persistence ─────────────────────────────────────────────────────
   const currentUserId = clerkUserId || "local";
-  const draft: JournalDraft = { verseRef, verseText, observation, prayer, execution };
+  const draft: JournalDraft = { verseRef, verseText, translation: verseTranslation, observation, prayer, execution };
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
 
@@ -397,6 +398,8 @@ export default function JournalPage() {
     setLookupError("");
     setVerseRef(value.verseRef);
     setVerseText(value.verseText);
+    setVerseTranslation(value.translation);
+    if (TRANSLATIONS.some(t => t.id === value.translation)) setTranslationState(value.translation);
     setVerseLookedUp(!!value.verseText);
     setObservation(value.observation);
     setPrayer(value.prayer);
@@ -460,9 +463,9 @@ export default function JournalPage() {
     setPendingPassage(null);
     setSaved(false);
     // Keep the reader's observations and prayer when changing the passage.
-    const nextDraft = { ...latestDraft.current, verseRef: incoming.ref, verseText: incoming.text };
-    applyDraft(nextDraft);
     const incomingTranslation = TRANSLATIONS.some(t => t.id === incoming.translation) ? incoming.translation : getTranslation();
+    const nextDraft = { ...latestDraft.current, verseRef: incoming.ref, verseText: incoming.text, translation: incoming.text ? incomingTranslation : "" };
+    applyDraft(nextDraft);
     setTranslationState(incomingTranslation);
     setTranslation(incomingTranslation);
     setDraftMessage("Passage updated. Your writing has been kept.");
@@ -512,6 +515,7 @@ export default function JournalPage() {
     setLookingUp(false);
     setVerseRef(value);
     setVerseText("");
+    setVerseTranslation("");
     setVerseLookedUp(false);
     setLookupError("");
     const results = suggestBooks(value);
@@ -542,17 +546,19 @@ export default function JournalPage() {
     setLookingUp(true);
     setLookupError("");
     setVerseText("");
+    setVerseTranslation("");
     try {
       const text = await fetchVerse(ref, incomingTranslation || translation);
       if (request !== lookupRequest.current) return;
       setVerseText(text);
+      setVerseTranslation(incomingTranslation || translation);
       setVerseLookedUp(true);
       // Check if already a memory verse
       const memVerses = getMemoryVerses();
       setIsMemoryVerse(memVerses.some(v => v.verse === ref));
-    } catch {
+    } catch (cause) {
       if (request !== lookupRequest.current) return;
-      setLookupError("Could not find that verse. Try a format like 'John 3:16' or 'Romans 8:28'.");
+      setLookupError(cause instanceof Error ? cause.message : "Could not load that passage. Please try again.");
     } finally {
       if (request === lookupRequest.current) setLookingUp(false);
     }
@@ -564,6 +570,7 @@ export default function JournalPage() {
       userId: clerkUserId || "local",
       revelationVerse: verseRef.trim(),
       revelationText: verseText,
+      translation: verseTranslation || null,
       observation: observation.trim(),
       prayer: prayer.trim(),
       execution: execution.trim(),
@@ -668,6 +675,7 @@ export default function JournalPage() {
             setSaved(false);
             setVerseRef("");
             setVerseText("");
+            setVerseTranslation("");
             setVerseLookedUp(false);
             setObservation("");
             setPrayer("");
@@ -782,19 +790,7 @@ export default function JournalPage() {
                   setVerseRef(planSuggestedVerse);
                   setIsQuickEntry(true);
                   setShowSuggestions(false);
-                  setLookingUp(true);
-                  setLookupError("");
-                  try {
-                    const text = await fetchVerse(planSuggestedVerse, translation);
-                    setVerseText(text);
-                    setVerseLookedUp(true);
-                    const memVerses = getMemoryVerses();
-                    setIsMemoryVerse(memVerses.some(v => v.verse === planSuggestedVerse));
-                  } catch (err: any) {
-                    setLookupError(err.message || "Could not find that verse.");
-                  } finally {
-                    setLookingUp(false);
-                  }
+                  await lookupVerse(planSuggestedVerse);
                 }}
                 className="px-3 py-1.5 text-xs text-accent-gold border border-accent-gold/20 rounded-lg hover:bg-accent-gold/5 transition shrink-0"
               >
@@ -835,12 +831,13 @@ export default function JournalPage() {
                       className="flex-1 min-w-[200px] px-4 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark placeholder:text-muted/50 focus:outline-none text-sm"
                     />
                     <select
+                      aria-label="Journal Bible translation"
                       value={translation}
-                      onChange={(e) => { setTranslationState(e.target.value); setTranslation(e.target.value); }}
-                      className="px-2 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-xs focus:outline-none shrink-0"
+                      onChange={(e) => { const value = e.target.value; setTranslationState(value); setTranslation(value); if (verseRef.trim()) void lookupVerse(undefined, value); }}
+                      className="max-w-full min-w-0 px-2 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-xs focus:outline-none"
                     >
                       {TRANSLATIONS.map(t => (
-                        <option key={t.id} value={t.id}>{t.label}</option>
+                        <option key={t.id} value={t.id}>{t.label} — {t.name}</option>
                       ))}
                     </select>
                     <button
@@ -895,12 +892,13 @@ export default function JournalPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <select
+                      aria-label="Journal Bible translation"
                       value={translation}
-                      onChange={(e) => { setTranslationState(e.target.value); setTranslation(e.target.value); }}
-                      className="flex-1 sm:flex-initial px-4 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-xs focus:outline-none shrink-0"
+                      onChange={(e) => { const value = e.target.value; setTranslationState(value); setTranslation(value); if (verseRef.trim()) void lookupVerse(undefined, value); }}
+                      className="max-w-full min-w-0 flex-1 sm:flex-initial px-4 py-2.5 bg-ivory border border-brown/10 rounded-xl text-dark text-xs focus:outline-none"
                     >
                       {TRANSLATIONS.map(t => (
-                        <option key={t.id} value={t.id}>{t.label}</option>
+                        <option key={t.id} value={t.id}>{t.label} — {t.name}</option>
                       ))}
                     </select>
                     <button
@@ -950,15 +948,7 @@ export default function JournalPage() {
                 }
 
                 setShowSuggestions(false);
-                setLookingUp(true);
-                setLookupError("");
-                setVerseText("");
-                try {
-                  const text = await fetchVerse(verse, translation);
-                  setVerseText(text);
-                  setVerseLookedUp(true);
-                } catch { setLookupError("Could not fetch today's verse."); }
-                finally { setLookingUp(false); }
+                await lookupVerse(verse);
               }}
               className="w-full px-3 py-2 text-accent-olive text-xs font-medium border border-accent-olive/20 rounded-xl hover:bg-accent-olive/5 transition whitespace-nowrap md:w-auto"
               title="Get today's suggested verse"
@@ -974,17 +964,17 @@ export default function JournalPage() {
           {verseLookedUp && verseText && (
             <div className="mt-4 rounded-xl overflow-hidden" style={{ animation: "fadeInUp 0.3s ease-out both" }}>
               <div className="bg-ivory/80 p-4 border-l-2 border-accent-gold/30">
-                <p className="text-dark text-sm leading-relaxed italic">
+                <p className="whitespace-pre-line text-dark text-sm leading-relaxed italic">
                   &ldquo;{verseText}&rdquo;
                 </p>
                 <div className="flex items-center justify-between mt-3">
-                  <p className="text-muted text-xs">&mdash; {verseRef}</p>
+                  <p className="text-muted text-xs">&mdash; {verseRef} · {verseTranslation ? verseTranslation.toUpperCase() : "Translation unknown"}</p>
                   <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end">
                       <button
                         onClick={() => {
                           if (isMemoryVerse) return;
-                          addMemoryVerse(verseRef.trim(), verseText);
+                          addMemoryVerse(verseRef.trim(), verseText, verseTranslation || null);
                           setIsMemoryVerse(true);
                         }}
                         className={`text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 ${isMemoryVerse ? "text-accent-gold" : "text-muted/50 hover:text-accent-gold"}`}

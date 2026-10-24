@@ -120,7 +120,7 @@ const reflectionPrompts = [
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const [ready, setReady] = useState(false);
   const [darkMode, setDarkModeState] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -135,7 +135,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
     async function init() {
       try {
-        await initializeStore(isSignedIn || false);
+        await initializeStore(isSignedIn || false, userId || "local");
       } catch (e) {
         console.error("Store initialization failed in layout", e);
       }
@@ -180,7 +180,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       window.removeEventListener("rope-theme-toggle", handleCustomChange as any);
       window.removeEventListener("rope-open-help", handleOpenHelp as any);
     };
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, userId]);
 
   useEffect(() => {
     // Only toggle if the current DOM state differs from our state

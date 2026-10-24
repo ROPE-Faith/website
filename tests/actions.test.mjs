@@ -62,3 +62,17 @@ test("entry, prayer and gratitude sync updates all constrain record ownership", 
     assert.deepEqual(predicate.params, ["reader"]);
   }
 });
+
+test("cloud highlight saves retain separate phrase identities, anchors and notes", async () => {
+  const { actions, writes, dialect } = setup();
+  const h = { id: "phrase-1", book: "John", chapter: 3, verse: 16, color: "gold", note: "Private note", createdAt: new Date().toISOString(), selection: { endVerse: 16, translation: "kjv", startOffset: 0, endOffset: 3, verses: [{ verse: 16, text: "For God so loved" }] } };
+  await actions.saveDbHighlight(h, "reader");
+  await actions.saveDbHighlight({ ...h, id: "phrase-2" }, "reader");
+  assert.equal(writes[0].values.id, "reader_phrase-1");
+  assert.equal(writes[1].values.id, "reader_phrase-2");
+  assert.equal(writes[0].values.selection.endOffset, 3);
+  assert.equal(writes[0].values.note, "Private note");
+  assert.deepEqual(dialect.sqlToQuery(writes[0].config.setWhere).params, ["reader"]);
+  await assert.rejects(actions.saveDbHighlight(h, "another-account"), /Unauthorized/);
+  assert.equal(writes.length, 2);
+});
